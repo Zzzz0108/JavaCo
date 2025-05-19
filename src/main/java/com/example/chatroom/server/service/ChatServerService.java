@@ -22,16 +22,25 @@ public class ChatServerService {
     private final String groupsFile = "groups.txt";
     private final String logFile = "log.txt";
     private final String chatLogsDir = "chat_logs";  // 聊天记录目录
+    private final String filesDir = "shared_files";  // 文件存储目录
 
     public ChatServerService(int port) {
         this.port = port;
         loadUsers();
         loadGroups();
         createChatLogsDirectory();
+        createFilesDirectory();
     }
 
     private void createChatLogsDirectory() {
         File dir = new File(chatLogsDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+    }
+
+    private void createFilesDirectory() {
+        File dir = new File(filesDir);
         if (!dir.exists()) {
             dir.mkdirs();
         }
@@ -94,12 +103,11 @@ public class ChatServerService {
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
                     if (!line.isEmpty()) {
-                        String[] parts = line.split(",");
-                        if (parts.length == 2) {
-                            String groupId = parts[0].trim();
-                            String groupName = parts[1].trim();
-                            System.out.println("加载群组: " + groupId + " - " + groupName);
-                            createGroup(groupId, groupName);
+                        ChatGroup group = ChatGroup.fromFileString(line);
+                        if (group != null) {
+                            System.out.println("加载群组: " + group.getGroupId() + " - " + group.getGroupName() + 
+                                             " (成员数: " + group.getMemberCount() + ")");
+                            groups.put(group.getGroupId(), group);
                         }
                     }
                 }
@@ -125,7 +133,7 @@ public class ChatServerService {
             
             try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
                 for (ChatGroup group : groups.values()) {
-                    String line = group.getGroupId() + "," + group.getGroupName();
+                    String line = group.toFileString();
                     System.out.println("写入群组: " + line);
                     writer.write(line);
                     writer.newLine();
@@ -154,6 +162,7 @@ public class ChatServerService {
             group.addMember(client);
             System.out.println("用户 " + client.getName() + " 成功加入群组 " + groupId);
             broadcastToGroup(groupId, client.getName() + " 加入了群组");
+            saveGroups(); // 保存群组信息
             return true;
         }
         System.out.println("加入群组失败: 群组不存在 - " + groupId);
@@ -165,6 +174,7 @@ public class ChatServerService {
         if (group != null && group.hasMember(client)) {
             group.removeMember(client);
             broadcastToGroup(groupId, client.getName() + " 离开了群组");
+            saveGroups(); // 保存群组信息
             return true;
         }
         return false;
@@ -174,7 +184,7 @@ public class ChatServerService {
         ChatGroup group = groups.get(groupId);
         if (group != null) {
             String fullMessage = "[群组-" + group.getGroupName() + "] " + message;
-            for (ClientConnection member : group.getMembers()) {
+            for (ClientConnection member : group.getOnlineMembers()) {
                 try {
                     member.getDos().writeUTF(fullMessage);
                     member.getDos().flush();
@@ -186,19 +196,9 @@ public class ChatServerService {
             }
             
             // 为群组中离线的成员保存消息
-            for (String username : users.keySet()) {
+            for (String username : group.getAllMembers()) {
                 if (!isUserOnline(username)) {
-                    // 检查用户是否在群组中
-                    boolean isInGroup = false;
-                    for (ClientConnection member : group.getMembers()) {
-                        if (member.getName().equals(username)) {
-                            isInGroup = true;
-                            break;
-                        }
-                    }
-                    if (isInGroup) {
-                        addUnreadMessage(username, fullMessage);
-                    }
+                    addUnreadMessage(username, fullMessage);
                 }
             }
         }
@@ -460,6 +460,12 @@ public class ChatServerService {
                     System.out.println("收到退出命令");
                     handleClientExit(connection);
                     break;
+                } else if (message.startsWith("@@file|")) {
+                    System.out.println("收到文件传输请求");
+                    handleFileTransfer(message, connection);
+                } else if (message.startsWith("@@download|")) {
+                    System.out.println("收到文件下载请求");
+                    handleFileDownload(message, connection);
                 } else if (message.equals("@@list")) {
                     System.out.println("收到在线用户列表请求");
                     listOnlineUsersForClient(connection);
@@ -666,5 +672,156 @@ public class ChatServerService {
             System.err.println("发送全部用户列表失败: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private void handleFileTransfer(String message, ClientConnection sender) {
+        try {
+            String[] parts = message.split("\\|");
+            if (parts.length != 4) {
+                System.err.println("文件传输命令格式错误: " + message);
+                return;
+            }
+
+            String type = parts[1];  // "group" 或 "private"
+            String target = parts[2];  // 群组ID或接收者用户名
+            String fileName = parts[3];
+            System.out.println("开始处理文件传输 - 类型: " + type + ", 目标: " + target + ", 文件名: " + fileName);
+
+            // 接收文件数据
+            long fileSize = sender.getDis().readLong();
+            System.out.println("接收到的文件大小: " + formatFileSize(fileSize));
+            
+            if (fileSize <= 0) {
+                System.err.println("文件大小为0或无效");
+                sender.getDos().writeUTF("文件传输失败：文件大小为0");
+                sender.getDos().flush();
+                return;
+            }
+
+            // 创建文件存储目录（如果不存在）
+            File dir = new File(filesDir);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+
+            // 保存文件
+            String filePath = filesDir + File.separator + fileName;
+            System.out.println("保存文件到: " + filePath);
+            
+            try (FileOutputStream fos = new FileOutputStream(filePath)) {
+                byte[] buffer = new byte[8192];
+                long remaining = fileSize;
+                long totalBytesRead = 0;
+                
+                while (remaining > 0) {
+                    int bytesRead = sender.getDis().read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                    if (bytesRead == -1) break;
+                    fos.write(buffer, 0, bytesRead);
+                    remaining -= bytesRead;
+                    totalBytesRead += bytesRead;
+                    System.out.println("已接收: " + formatFileSize(totalBytesRead) + " / " + formatFileSize(fileSize));
+                }
+                System.out.println("文件保存成功");
+            }
+
+            if (type.equals("group")) {
+                // 群文件传输
+                ChatGroup group = groups.get(target);
+                if (group != null) {
+                    String fileMessage = "[" + sender.getName() + "] 上传了群文件: " + fileName + " (大小: " + formatFileSize(fileSize) + ")";
+                    System.out.println("广播群文件消息: " + fileMessage);
+                    broadcastToGroup(target, fileMessage);
+                    
+                    // 为离线群成员保存文件通知
+                    for (String username : group.getAllMembers()) {
+                        if (!isUserOnline(username)) {
+                            System.out.println("为离线用户 " + username + " 保存文件通知");
+                            addUnreadMessage(username, fileMessage);
+                        }
+                    }
+                } else {
+                    System.err.println("群组不存在: " + target);
+                    sender.getDos().writeUTF("文件传输失败：群组不存在");
+                    sender.getDos().flush();
+                }
+            } else {
+                // 私聊文件传输
+                String fileMessage = "[" + sender.getName() + "] 发送了私聊文件: " + fileName + " (大小: " + formatFileSize(fileSize) + ")";
+                System.out.println("处理私聊文件: " + fileMessage);
+                
+                // 发送给在线用户
+                boolean userOnline = false;
+                for (ClientConnection cc : clientConnections) {
+                    if (cc.getName().equals(target)) {
+                        System.out.println("发送文件通知给在线用户: " + target);
+                        cc.getDos().writeUTF("@@file|" + sender.getName() + "|" + fileName + "|" + fileSize);
+                        cc.getDos().flush();
+                        userOnline = true;
+                        break;
+                    }
+                }
+
+                // 如果用户不在线，保存为未读消息
+                if (!userOnline) {
+                    System.out.println("用户 " + target + " 不在线，保存为未读消息");
+                    addUnreadMessage(target, fileMessage);
+                }
+
+                // 通知发送者
+                System.out.println("通知发送者文件已发送");
+                sender.getDos().writeUTF("文件已发送给 " + target);
+                sender.getDos().flush();
+            }
+        } catch (IOException e) {
+            System.err.println("文件传输失败: " + e.getMessage());
+            e.printStackTrace();
+            try {
+                sender.getDos().writeUTF("文件传输失败: " + e.getMessage());
+                sender.getDos().flush();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private void handleFileDownload(String message, ClientConnection client) {
+        try {
+            String fileName = message.split("\\|")[1];
+            File file = new File(filesDir, fileName);
+            
+            if (file.exists() && file.length() > 0) {
+                System.out.println("开始发送文件: " + fileName + " (大小: " + formatFileSize(file.length()) + ")");
+                // 发送文件大小
+                client.getDos().writeLong(file.length());
+                
+                // 发送文件数据
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    long totalBytesRead = 0;
+                    while ((bytesRead = fis.read(buffer)) != -1) {
+                        client.getDos().write(buffer, 0, bytesRead);
+                        totalBytesRead += bytesRead;
+                        System.out.println("已发送: " + formatFileSize(totalBytesRead) + " / " + formatFileSize(file.length()));
+                    }
+                }
+                client.getDos().flush();
+                System.out.println("文件发送完成");
+            } else {
+                System.err.println("文件不存在或为空: " + fileName);
+                client.getDos().writeLong(-1);  // 文件不存在
+                client.getDos().flush();
+            }
+        } catch (IOException e) {
+            System.err.println("文件下载失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " B";
+        if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
+        if (size < 1024 * 1024 * 1024) return String.format("%.1f MB", size / (1024.0 * 1024));
+        return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
     }
 }

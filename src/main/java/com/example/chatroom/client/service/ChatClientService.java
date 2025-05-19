@@ -61,4 +61,12 @@ public abstract class ChatClientService {
     }
 
     protected abstract Socket createSocket(String host, int port);
+
+    public DataOutputStream getDos() {
+        return dos;
+    }
+
+    public DataInputStream getDis() {
+        return dis;
+    }
 }

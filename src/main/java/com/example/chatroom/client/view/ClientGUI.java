@@ -8,6 +8,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.HashSet;
@@ -61,6 +64,7 @@ public class ClientGUI extends JFrame implements KeyListener {
         JButton joinGroupBtn = new JButton("加入群组");
         JButton leaveGroupBtn = new JButton("退出群组");
         JButton listGroupsBtn = new JButton("群组列表");
+        JButton sendFileBtn = new JButton("发送文件");
         
         // 设置按钮大小一致
         Dimension buttonSize = new Dimension(100, 30);
@@ -68,11 +72,13 @@ public class ClientGUI extends JFrame implements KeyListener {
         joinGroupBtn.setPreferredSize(buttonSize);
         leaveGroupBtn.setPreferredSize(buttonSize);
         listGroupsBtn.setPreferredSize(buttonSize);
+        sendFileBtn.setPreferredSize(buttonSize);
         
         groupControlPanel.add(createGroupBtn);
         groupControlPanel.add(joinGroupBtn);
         groupControlPanel.add(leaveGroupBtn);
         groupControlPanel.add(listGroupsBtn);
+        groupControlPanel.add(sendFileBtn);
         topPanel.add(groupControlPanel, BorderLayout.EAST);
         
         mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -160,6 +166,30 @@ public class ClientGUI extends JFrame implements KeyListener {
             }
         });
 
+        // 添加发送文件按钮的事件监听
+        sendFileBtn.addActionListener(e -> {
+            String selectedGroup = (String) groupSelector.getSelectedItem();
+            String selectedUser = (String) privateChatSelector.getSelectedItem();
+            
+            JFileChooser fileChooser = new JFileChooser();
+            if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File selectedFile = fileChooser.getSelectedFile();
+                try {
+                    if (selectedUser != null && !selectedUser.equals("选择私聊对象")) {
+                        // 发送私聊文件
+                        sendPrivateFile(selectedUser, selectedFile);
+                    } else if (selectedGroup != null && !selectedGroup.equals("公共聊天")) {
+                        // 发送群文件
+                        sendGroupFile(selectedGroup, selectedFile);
+                    } else {
+                        JOptionPane.showMessageDialog(this, "请选择私聊对象或群组");
+                    }
+                } catch (IOException ex) {
+                    jta.append("发送文件失败: " + ex.getMessage() + "\n");
+                }
+            }
+        });
+
         // 登录
         login();
 
@@ -231,6 +261,50 @@ public class ClientGUI extends JFrame implements KeyListener {
                 } else if (message.startsWith("[历史记录]")) {
                     // 处理历史记录消息
                     jta.append(message.substring("[历史记录]".length()) + "\n");
+                } else if (message.startsWith("@@file|")) {
+                    // 处理文件接收请求
+                    handleFileReceive(message);
+                } else if (message.contains("上传了群文件:") || message.contains("发送了私聊文件:")) {
+                    // 处理文件上传消息
+                    String fileName;
+                    String fileSize;
+                    
+                    if (message.contains("上传了群文件:")) {
+                        String[] parts = message.split("上传了群文件:");
+                        fileName = parts[1].substring(0, parts[1].indexOf(" (")).trim();
+                        fileSize = parts[1].substring(parts[1].indexOf("(") + 1, parts[1].indexOf(")"));
+                    } else {
+                        String[] parts = message.split("发送了私聊文件:");
+                        fileName = parts[1].substring(0, parts[1].indexOf(" (")).trim();
+                        fileSize = parts[1].substring(parts[1].indexOf("(") + 1, parts[1].indexOf(")"));
+                    }
+                    
+                    // 将消息添加到聊天区域
+                    jta.append(message + "\n");
+                    jta.append("点击这里下载文件: " + fileName + "\n");
+                    jta.append("文件大小: " + fileSize + "\n\n");
+                    
+                    // 添加鼠标点击事件
+                    jta.addMouseListener(new java.awt.event.MouseAdapter() {
+                        @Override
+                        public void mouseClicked(java.awt.event.MouseEvent evt) {
+                            int offset = jta.viewToModel2D(evt.getPoint());
+                            try {
+                                int line = jta.getLineOfOffset(offset);
+                                String lineText = jta.getText(jta.getLineStartOffset(line), 
+                                                           jta.getLineEndOffset(line) - jta.getLineStartOffset(line));
+                                if (lineText.contains("点击这里下载文件:")) {
+                                    try {
+                                        downloadFile(fileName);
+                                    } catch (IOException ex) {
+                                        jta.append("下载文件失败: " + ex.getMessage() + "\n");
+                                    }
+                                }
+                            } catch (javax.swing.text.BadLocationException ex) {
+                                ex.printStackTrace();
+                            }
+                        }
+                    });
                 } else if (message.startsWith("[群组-")) {
                     // 处理群组消息
                     jta.append(message + "\n");
@@ -241,7 +315,7 @@ public class ClientGUI extends JFrame implements KeyListener {
                         String groupId = parts[0];
                         joinedGroups.add(groupId);
                         updateGroupSelector();
-                        groupSelector.setSelectedItem(groupId); // 自动选择新创建的群组
+                        groupSelector.setSelectedItem(groupId);
                         jta.append(message + "\n");
                     }
                 } else if (message.startsWith("成功加入群组:")) {
@@ -322,6 +396,157 @@ public class ClientGUI extends JFrame implements KeyListener {
                 }
             }
         }
+    }
+
+    private void sendGroupFile(String groupId, File file) throws IOException {
+        String fileName = file.getName();
+        System.out.println("开始发送群文件: " + fileName + " 到群组: " + groupId);
+        
+        // 先发送文件传输命令
+        clientController.handleSystemCommand("@@file|group|" + groupId + "|" + fileName);
+        
+        // 等待一小段时间确保命令被处理
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        
+        // 发送文件数据
+        try (FileInputStream fis = new FileInputStream(file)) {
+            long fileSize = file.length();
+            System.out.println("文件大小: " + formatFileSize(fileSize));
+            
+            // 发送文件大小
+            clientController.getDos().writeLong(fileSize);
+            clientController.getDos().flush();
+            
+            // 发送文件内容
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            long totalBytesRead = 0;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                clientController.getDos().write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+                System.out.println("已发送: " + formatFileSize(totalBytesRead) + " / " + formatFileSize(fileSize));
+            }
+            clientController.getDos().flush();
+            System.out.println("文件发送完成");
+        }
+    }
+
+    private void sendPrivateFile(String receiver, File file) throws IOException {
+        String fileName = file.getName();
+        System.out.println("开始发送私聊文件: " + fileName + " 给用户: " + receiver);
+        
+        // 先发送文件传输命令
+        clientController.handleSystemCommand("@@file|private|" + receiver + "|" + fileName);
+        
+        // 等待一小段时间确保命令被处理
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        
+        // 发送文件数据
+        try (FileInputStream fis = new FileInputStream(file)) {
+            long fileSize = file.length();
+            System.out.println("文件大小: " + formatFileSize(fileSize));
+            
+            // 发送文件大小
+            clientController.getDos().writeLong(fileSize);
+            clientController.getDos().flush();
+            
+            // 发送文件内容
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            long totalBytesRead = 0;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                clientController.getDos().write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+                System.out.println("已发送: " + formatFileSize(totalBytesRead) + " / " + formatFileSize(fileSize));
+            }
+            clientController.getDos().flush();
+            System.out.println("文件发送完成");
+        }
+    }
+
+    private void handleFileReceive(String message) {
+        try {
+            String[] parts = message.split("\\|");
+            String sender = parts[1];
+            String fileName = parts[2];
+            long fileSize = Long.parseLong(parts[3]);
+
+            int choice = JOptionPane.showConfirmDialog(this,
+                    "收到来自 " + sender + " 的文件: " + fileName + "\n大小: " + formatFileSize(fileSize) + "\n是否接收？",
+                    "文件接收",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (choice == JOptionPane.YES_OPTION) {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setSelectedFile(new File(fileName));
+                if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    File saveFile = fileChooser.getSelectedFile();
+                    clientController.handleSystemCommand("@@download|" + fileName);
+                    
+                    // 接收文件数据
+                    long receivedSize = clientController.getDis().readLong();
+                    if (receivedSize >= 0) {
+                        try (FileOutputStream fos = new FileOutputStream(saveFile)) {
+                            byte[] buffer = new byte[8192];
+                            long remaining = receivedSize;
+                            while (remaining > 0) {
+                                int bytesRead = clientController.getDis().read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                                if (bytesRead == -1) break;
+                                fos.write(buffer, 0, bytesRead);
+                                remaining -= bytesRead;
+                            }
+                        }
+                        jta.append("文件已保存到: " + saveFile.getAbsolutePath() + "\n");
+                    } else {
+                        jta.append("文件下载失败: 文件不存在\n");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            jta.append("接收文件失败: " + e.getMessage() + "\n");
+        }
+    }
+
+    private void downloadFile(String fileName) throws IOException {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setSelectedFile(new File(fileName));
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File saveFile = fileChooser.getSelectedFile();
+            clientController.handleSystemCommand("@@download|" + fileName);
+            
+            // 接收文件数据
+            long receivedSize = clientController.getDis().readLong();
+            if (receivedSize >= 0) {
+                try (FileOutputStream fos = new FileOutputStream(saveFile)) {
+                    byte[] buffer = new byte[8192];
+                    long remaining = receivedSize;
+                    while (remaining > 0) {
+                        int bytesRead = clientController.getDis().read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                        if (bytesRead == -1) break;
+                        fos.write(buffer, 0, bytesRead);
+                        remaining -= bytesRead;
+                    }
+                }
+                jta.append("文件已保存到: " + saveFile.getAbsolutePath() + "\n");
+            } else {
+                jta.append("文件下载失败: 文件不存在\n");
+            }
+        }
+    }
+
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " B";
+        if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
+        if (size < 1024 * 1024 * 1024) return String.format("%.1f MB", size / (1024.0 * 1024));
+        return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
     }
 
     @Override

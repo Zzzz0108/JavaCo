@@ -3,7 +3,9 @@ package com.example.chatroom.client.controller;
 import com.example.chatroom.client.model.ClientModel;
 import com.example.chatroom.client.service.DefaultChatClientService;
 import com.example.chatroom.client.view.PrivateChatWindow;
-
+import com.example.chatroom.client.service.ChatClientService;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -12,6 +14,7 @@ public class ClientController {
     private final ClientModel clientModel;
     private final DefaultChatClientService chatClientService;
     private final Map<String, PrivateChatWindow> privateChatWindows;
+    private boolean isAnonymous = false;
 
     public ClientController(String host, int port) {
         this.clientModel = new ClientModel();
@@ -68,5 +71,13 @@ public class ClientController {
             name -> new PrivateChatWindow(name, this));
         window.appendMessage(sender + ": " + message);
         window.setVisible(true);
+    }
+
+    public DataOutputStream getDos() {
+        return chatClientService.getDos();
+    }
+
+    public DataInputStream getDis() {
+        return chatClientService.getDis();
     }
 }
