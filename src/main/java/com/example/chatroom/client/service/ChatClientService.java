@@ -29,17 +29,21 @@ public abstract class ChatClientService {
     }
 
     public void sendMessage(String message) throws IOException {
+        System.out.println("发送消息: " + message);
         if (message.startsWith("@")) {
             dos.writeUTF("@" + message.substring(1));
         } else {
             dos.writeUTF(message);
         }
         dos.flush();
+        System.out.println("消息已发送");
     }
 
     public void handleSystemCommand(String command) throws IOException {
+        System.out.println("发送系统命令: " + command);
         dos.writeUTF(command);
         dos.flush();
+        System.out.println("系统命令已发送");
     }
 
     public String receiveMessage() throws IOException {
