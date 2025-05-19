@@ -199,13 +199,20 @@ public class ChatServerService {
 
     private void listOnlineUsersForClient(ClientConnection connection) {
         StringBuilder onlineUsers = new StringBuilder("在线用户：");
+        boolean isFirst = true;
         for (ClientConnection cc : clientConnections) {
-            onlineUsers.append(cc.getName()).append(" ");
+            if (!isFirst) {
+                onlineUsers.append(" ");
+            }
+            onlineUsers.append(cc.getName());
+            isFirst = false;
         }
         try {
+            System.out.println("发送在线用户列表: " + onlineUsers.toString());
             connection.getDos().writeUTF(onlineUsers.toString());
             connection.getDos().flush();
         } catch (IOException e) {
+            System.err.println("发送在线用户列表失败: " + e.getMessage());
             e.printStackTrace();
         }
     }

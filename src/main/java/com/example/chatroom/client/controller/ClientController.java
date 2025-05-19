@@ -54,6 +54,10 @@ public class ClientController {
         return clientModel.isAnonymous();
     }
 
+    public String getName() {
+        return clientModel.getName();
+    }
+
     public void handlePrivateMessage(String sender, String message) {
         if (!PrivateChatWindow.canOpenNewWindow()) {
             PrivateChatWindow.showError();
