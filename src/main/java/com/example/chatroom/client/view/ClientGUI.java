@@ -108,7 +108,8 @@ public class ClientGUI extends JFrame implements KeyListener {
         // 添加刷新用户列表按钮的事件监听
         refreshUsersBtn.addActionListener(e -> {
             try {
-                clientController.handleSystemCommand("@@list");
+                // 请求全部用户列表而不是在线用户列表
+                clientController.handleSystemCommand("@@allusers");
             } catch (IOException ex) {
                 jta.append("获取用户列表失败: " + ex.getMessage() + "\n");
             }
@@ -224,7 +225,10 @@ public class ClientGUI extends JFrame implements KeyListener {
         try {
             while (true) {
                 String message = clientController.receiveMessage();
-                if (message.startsWith("[历史记录]")) {
+                if (message.equals("===未读消息===")) {
+                    // 处理未读消息分隔符
+                    jta.append("\n===未读消息===\n");
+                } else if (message.startsWith("[历史记录]")) {
                     // 处理历史记录消息
                     jta.append(message.substring("[历史记录]".length()) + "\n");
                 } else if (message.startsWith("[群组-")) {
@@ -259,6 +263,9 @@ public class ClientGUI extends JFrame implements KeyListener {
                     // 处理在线用户列表消息
                     updatePrivateChatSelector(message.substring("在线用户：".length()).trim());
                     jta.append(message + "\n");
+                } else if (message.startsWith("全部用户：")) {
+                    // 处理全部用户列表消息
+                    updatePrivateChatSelector(message.substring("全部用户：".length()).trim());
                 } else if (message.startsWith("[") && message.contains("私聊说:")) {
                     // 处理私聊消息
                     String sender = message.substring(1, message.indexOf("]"));

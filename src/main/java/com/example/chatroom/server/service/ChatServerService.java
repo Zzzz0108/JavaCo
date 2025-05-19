@@ -17,6 +17,7 @@ public class ChatServerService {
     private final List<ClientConnection> clientConnections = new CopyOnWriteArrayList<>();
     private final Map<String, String> users = new HashMap<>();
     private final Map<String, ChatGroup> groups = new ConcurrentHashMap<>();
+    private final Map<String, List<String>> unreadMessages = new ConcurrentHashMap<>();  // 存储未读消息
     private final String usersFile = "users.txt";
     private final String groupsFile = "groups.txt";
     private final String logFile = "log.txt";
@@ -183,6 +184,23 @@ public class ChatServerService {
                     e.printStackTrace();
                 }
             }
+            
+            // 为群组中离线的成员保存消息
+            for (String username : users.keySet()) {
+                if (!isUserOnline(username)) {
+                    // 检查用户是否在群组中
+                    boolean isInGroup = false;
+                    for (ClientConnection member : group.getMembers()) {
+                        if (member.getName().equals(username)) {
+                            isInGroup = true;
+                            break;
+                        }
+                    }
+                    if (isInGroup) {
+                        addUnreadMessage(username, fullMessage);
+                    }
+                }
+            }
         }
     }
 
@@ -227,6 +245,9 @@ public class ChatServerService {
 
                     // 发送历史聊天记录
                     sendChatHistory(connection);
+                    
+                    // 发送未读消息
+                    sendUnreadMessages(connection);
 
                     handleClientCommunication(connection);
                 } else {
@@ -238,6 +259,46 @@ public class ChatServerService {
                 e.printStackTrace();
             }
         }).start();
+    }
+
+    private void sendUnreadMessages(ClientConnection connection) {
+        String username = connection.getName();
+        List<String> messages = unreadMessages.get(username);
+        if (messages != null && !messages.isEmpty()) {
+            try {
+                connection.getDos().writeUTF("===未读消息===");
+                connection.getDos().flush();
+                
+                for (String message : messages) {
+                    connection.getDos().writeUTF(message);
+                    connection.getDos().flush();
+                    // 将未读消息也保存到历史记录中
+                    saveChatLog(username, message);
+                }
+                
+                // 清空未读消息
+                unreadMessages.remove(username);
+            } catch (IOException e) {
+                System.err.println("发送未读消息失败: " + e.getMessage());
+            }
+        }
+    }
+
+    private void addUnreadMessage(String username, String message) {
+        if (!isUserOnline(username)) {
+            unreadMessages.computeIfAbsent(username, k -> new ArrayList<>()).add(message);
+            // 同时保存到历史记录
+            saveChatLog(username, message);
+        }
+    }
+
+    private boolean isUserOnline(String username) {
+        for (ClientConnection cc : clientConnections) {
+            if (cc.getName().equals(username)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void listOnlineUsersForClient(ClientConnection connection) {
@@ -267,7 +328,21 @@ public class ChatServerService {
             String content = parts[1];
             String fullMessage = "[" + sender.getName() + "] 私聊说: " + content;
 
-            boolean userFound = false;
+            // 检查接收者是否是已注册用户
+            if (!users.containsKey(receiverName)) {
+                try {
+                    String errorMessage = "用户 [" + receiverName + "] 不存在";
+                    sender.getDos().writeUTF(errorMessage);
+                    sender.getDos().flush();
+                    saveChatLog(sender.getName(), errorMessage);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                return;
+            }
+
+            boolean userOnline = false;
+            // 尝试发送给在线用户
             for (ClientConnection cc : clientConnections) {
                 if (cc.getName().equals(receiverName)) {
                     try {
@@ -276,7 +351,7 @@ public class ChatServerService {
                         // 保存聊天记录
                         saveChatLog(receiverName, fullMessage);
                         saveChatLog(sender.getName(), fullMessage);
-                        userFound = true;
+                        userOnline = true;
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -284,12 +359,16 @@ public class ChatServerService {
                 }
             }
 
-            if (!userFound) {
+            // 如果用户不在线，保存为未读消息
+            if (!userOnline) {
+                addUnreadMessage(receiverName, fullMessage);
+                saveChatLog(sender.getName(), fullMessage);
+                
                 try {
-                    String errorMessage = "用户 [" + receiverName + "] 不在线/不存在/为匿名用户";
-                    sender.getDos().writeUTF(errorMessage);
+                    String noticeMessage = "用户 [" + receiverName + "] 当前不在线，消息将在其登录后发送";
+                    sender.getDos().writeUTF(noticeMessage);
                     sender.getDos().flush();
-                    saveChatLog(sender.getName(), errorMessage);
+                    saveChatLog(sender.getName(), noticeMessage);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -384,6 +463,9 @@ public class ChatServerService {
                 } else if (message.equals("@@list")) {
                     System.out.println("收到在线用户列表请求");
                     listOnlineUsersForClient(connection);
+                } else if (message.equals("@@allusers")) {
+                    System.out.println("收到全部用户列表请求");
+                    listAllUsersForClient(connection);
                 } else if (message.equals("@@quit")) {
                     System.out.println("收到退出请求");
                     handleClientQuit(connection);
@@ -448,6 +530,13 @@ public class ChatServerService {
                 saveChatLog(cc.getName(), message);
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+        
+        // 为离线用户保存消息
+        for (String username : users.keySet()) {
+            if (!isUserOnline(username)) {
+                addUnreadMessage(username, message);
             }
         }
     }
@@ -556,6 +645,26 @@ public class ChatServerService {
                 System.err.println("发送格式错误消息失败: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+    }
+
+    private void listAllUsersForClient(ClientConnection connection) {
+        StringBuilder allUsers = new StringBuilder("全部用户：");
+        boolean isFirst = true;
+        for (String username : users.keySet()) {
+            if (!isFirst) {
+                allUsers.append(" ");
+            }
+            allUsers.append(username);
+            isFirst = false;
+        }
+        try {
+            System.out.println("发送全部用户列表: " + allUsers.toString());
+            connection.getDos().writeUTF(allUsers.toString());
+            connection.getDos().flush();
+        } catch (IOException e) {
+            System.err.println("发送全部用户列表失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
