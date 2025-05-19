@@ -224,7 +224,10 @@ public class ClientGUI extends JFrame implements KeyListener {
         try {
             while (true) {
                 String message = clientController.receiveMessage();
-                if (message.startsWith("[群组-")) {
+                if (message.startsWith("[历史记录]")) {
+                    // 处理历史记录消息
+                    jta.append(message.substring("[历史记录]".length()) + "\n");
+                } else if (message.startsWith("[群组-")) {
                     // 处理群组消息
                     jta.append(message + "\n");
                 } else if (message.startsWith("成功创建群组:")) {
@@ -261,6 +264,7 @@ public class ClientGUI extends JFrame implements KeyListener {
                     String sender = message.substring(1, message.indexOf("]"));
                     String content = message.substring(message.indexOf("私聊说:") + 4);
                     clientController.handlePrivateMessage(sender, content);
+                    jta.append(message + "\n");
                 } else {
                     // 处理普通消息
                     jta.append(message + "\n");

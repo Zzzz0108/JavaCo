@@ -20,11 +20,48 @@ public class ChatServerService {
     private final String usersFile = "users.txt";
     private final String groupsFile = "groups.txt";
     private final String logFile = "log.txt";
+    private final String chatLogsDir = "chat_logs";  // 聊天记录目录
 
     public ChatServerService(int port) {
         this.port = port;
         loadUsers();
         loadGroups();
+        createChatLogsDirectory();
+    }
+
+    private void createChatLogsDirectory() {
+        File dir = new File(chatLogsDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+    }
+
+    private void saveChatLog(String username, String message) {
+        try {
+            File logFile = new File(chatLogsDir, username + "_chat.txt");
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true))) {
+                writer.write(getCurrentTime() + " " + message + "\n");
+            }
+        } catch (IOException e) {
+            System.err.println("保存聊天记录失败: " + e.getMessage());
+        }
+    }
+
+    private void sendChatHistory(ClientConnection connection) {
+        try {
+            File logFile = new File(chatLogsDir, connection.getName() + "_chat.txt");
+            if (logFile.exists()) {
+                try (BufferedReader reader = new BufferedReader(new FileReader(logFile))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        connection.getDos().writeUTF("[历史记录] " + line);
+                        connection.getDos().flush();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("发送聊天记录失败: " + e.getMessage());
+        }
     }
 
     public ChatGroup createGroup(String groupId, String groupName) {
@@ -135,10 +172,13 @@ public class ChatServerService {
     public void broadcastToGroup(String groupId, String message) {
         ChatGroup group = groups.get(groupId);
         if (group != null) {
+            String fullMessage = "[群组-" + group.getGroupName() + "] " + message;
             for (ClientConnection member : group.getMembers()) {
                 try {
-                    member.getDos().writeUTF("[群组-" + group.getGroupName() + "] " + message);
+                    member.getDos().writeUTF(fullMessage);
                     member.getDos().flush();
+                    // 保存聊天记录
+                    saveChatLog(member.getName(), fullMessage);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -185,6 +225,9 @@ public class ChatServerService {
                                 ", 时间: " + getCurrentTime());
                     }
 
+                    // 发送历史聊天记录
+                    sendChatHistory(connection);
+
                     handleClientCommunication(connection);
                 } else {
                     connection.getDos().writeUTF("fail");
@@ -222,13 +265,17 @@ public class ChatServerService {
         if (parts.length == 2) {
             String receiverName = parts[0];
             String content = parts[1];
+            String fullMessage = "[" + sender.getName() + "] 私聊说: " + content;
 
             boolean userFound = false;
             for (ClientConnection cc : clientConnections) {
                 if (cc.getName().equals(receiverName)) {
                     try {
-                        cc.getDos().writeUTF("[" + sender.getName() + "] 私聊说: " + content);
+                        cc.getDos().writeUTF(fullMessage);
                         cc.getDos().flush();
+                        // 保存聊天记录
+                        saveChatLog(receiverName, fullMessage);
+                        saveChatLog(sender.getName(), fullMessage);
                         userFound = true;
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -239,8 +286,10 @@ public class ChatServerService {
 
             if (!userFound) {
                 try {
-                    sender.getDos().writeUTF("用户 [" + receiverName + "] 不在线/不存在/为匿名用户");
+                    String errorMessage = "用户 [" + receiverName + "] 不在线/不存在/为匿名用户";
+                    sender.getDos().writeUTF(errorMessage);
                     sender.getDos().flush();
+                    saveChatLog(sender.getName(), errorMessage);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -254,6 +303,7 @@ public class ChatServerService {
             String groupId = parts[0];
             String content = parts[1];
             String displayName = sender.isAnonymous() ? sender.getAnonymousName() : sender.getName();
+            String fullMessage = "[群组-" + groups.get(groupId).getGroupName() + "] [" + displayName + "]：" + content;
             broadcastToGroup(groupId, "[" + displayName + "]：" + content);
         }
     }
@@ -394,6 +444,8 @@ public class ChatServerService {
             try {
                 cc.getDos().writeUTF(message);
                 cc.getDos().flush();
+                // 保存聊天记录
+                saveChatLog(cc.getName(), message);
             } catch (IOException e) {
                 e.printStackTrace();
             }
