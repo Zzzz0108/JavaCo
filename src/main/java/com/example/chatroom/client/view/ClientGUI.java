@@ -1,6 +1,7 @@
 package com.example.chatroom.client.view;
 
 import com.example.chatroom.client.controller.ClientController;
+import com.example.chatroom.client.service.VoiceChatService;
 
 import javax.swing.*;
 import java.awt.*;
@@ -23,10 +24,16 @@ public class ClientGUI extends JFrame implements KeyListener {
     private final Set<String> joinedGroups;
     private final JComboBox<String> groupSelector;
     private final JComboBox<String> privateChatSelector;
+    private final VoiceChatService voiceChatService;
+    private JButton voiceChatBtn;
+    private JButton groupVoiceChatBtn;
+    private boolean isInVoiceChat = false;
+    private String currentVoiceChatPartner = null;
 
     public ClientGUI(String host, int port) {
         this.clientController = new ClientController(host, port);
         this.joinedGroups = new HashSet<>();
+        this.voiceChatService = new VoiceChatService();
 
         setTitle("聊天室客户端");
         setBounds(700, 300, 1100, 600);
@@ -58,13 +65,15 @@ public class ClientGUI extends JFrame implements KeyListener {
         privateChatPanel.add(refreshUsersBtn);
         topPanel.add(privateChatPanel, BorderLayout.CENTER);
 
-        // 右侧：群组控制按钮
+        // 右侧：群组控制按钮和语音聊天按钮
         JPanel groupControlPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         JButton createGroupBtn = new JButton("创建群组");
         JButton joinGroupBtn = new JButton("加入群组");
         JButton leaveGroupBtn = new JButton("退出群组");
         JButton listGroupsBtn = new JButton("群组列表");
         JButton sendFileBtn = new JButton("发送文件");
+        voiceChatBtn = new JButton("语音聊天");
+        groupVoiceChatBtn = new JButton("群组语音");
         
         // 设置按钮大小一致
         Dimension buttonSize = new Dimension(100, 30);
@@ -73,12 +82,21 @@ public class ClientGUI extends JFrame implements KeyListener {
         leaveGroupBtn.setPreferredSize(buttonSize);
         listGroupsBtn.setPreferredSize(buttonSize);
         sendFileBtn.setPreferredSize(buttonSize);
+        voiceChatBtn.setPreferredSize(buttonSize);
+        groupVoiceChatBtn.setPreferredSize(buttonSize);
         
         groupControlPanel.add(createGroupBtn);
         groupControlPanel.add(joinGroupBtn);
         groupControlPanel.add(leaveGroupBtn);
         groupControlPanel.add(listGroupsBtn);
         groupControlPanel.add(sendFileBtn);
+        groupControlPanel.add(voiceChatBtn);
+        groupControlPanel.add(groupVoiceChatBtn);
+        
+        // 添加按钮事件监听器
+        voiceChatBtn.addActionListener(e -> handleVoiceChat());
+        groupVoiceChatBtn.addActionListener(e -> handleGroupVoiceChat());
+        
         topPanel.add(groupControlPanel, BorderLayout.EAST);
         
         mainPanel.add(topPanel, BorderLayout.NORTH);
@@ -251,6 +269,135 @@ public class ClientGUI extends JFrame implements KeyListener {
         }
     }
 
+    private void handleVoiceChat() {
+        String selectedUser = (String) privateChatSelector.getSelectedItem();
+        if (selectedUser != null && !selectedUser.equals("选择私聊对象")) {
+            if (!isInVoiceChat) {
+                try {
+                    // 发送语音聊天请求
+                    clientController.handleSystemCommand("@@voice|" + selectedUser);
+                    voiceChatBtn.setText("结束语音");
+                    isInVoiceChat = true;
+                    // 保存当前语音聊天的对象
+                    currentVoiceChatPartner = selectedUser;
+                } catch (IOException ex) {
+                    jta.append("启动语音聊天失败: " + ex.getMessage() + "\n");
+                }
+            } else {
+                // 结束语音聊天
+                voiceChatService.stopVoiceChat();
+                voiceChatBtn.setText("语音聊天");
+                isInVoiceChat = false;
+                // 发送语音结束消息
+                try {
+                    clientController.handleSystemCommand("@@voiceend|" + currentVoiceChatPartner);
+                    jta.append("[系统消息]：语音通话已结束\n");
+                    currentVoiceChatPartner = null;
+                } catch (IOException ex) {
+                    jta.append("发送语音结束消息失败: " + ex.getMessage() + "\n");
+                }
+            }
+        } else if (isInVoiceChat && currentVoiceChatPartner != null) {
+            // 如果正在语音聊天，但当前选择的不是语音对象，使用保存的语音对象
+            voiceChatService.stopVoiceChat();
+            voiceChatBtn.setText("语音聊天");
+            isInVoiceChat = false;
+            // 发送语音结束消息
+            try {
+                clientController.handleSystemCommand("@@voiceend|" + currentVoiceChatPartner);
+                jta.append("[系统消息]：语音通话已结束\n");
+                currentVoiceChatPartner = null;
+            } catch (IOException ex) {
+                jta.append("发送语音结束消息失败: " + ex.getMessage() + "\n");
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "请选择私聊对象");
+        }
+    }
+
+    private void handleGroupVoiceChat() {
+        String selectedGroup = (String) groupSelector.getSelectedItem();
+        if (selectedGroup != null && !selectedGroup.equals("公共聊天")) {
+            if (!isInVoiceChat) {
+                try {
+                    // 发送群组语音聊天请求
+                    clientController.handleSystemCommand("@@groupvoice|" + selectedGroup);
+                    groupVoiceChatBtn.setText("结束群语音");
+                    isInVoiceChat = true;
+                } catch (IOException ex) {
+                    jta.append("启动群组语音聊天失败: " + ex.getMessage() + "\n");
+                }
+            } else {
+                // 结束群组语音聊天
+                voiceChatService.stopVoiceChat();
+                groupVoiceChatBtn.setText("群组语音");
+                isInVoiceChat = false;
+                // 发送群组语音结束消息
+                try {
+                    clientController.handleSystemCommand("@@groupvoiceend|" + selectedGroup);
+                    jta.append("[系统消息]：您已退出群组语音通话\n");
+                } catch (IOException ex) {
+                    jta.append("发送群组语音结束消息失败: " + ex.getMessage() + "\n");
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "请选择群组");
+        }
+    }
+
+    private void handleVoiceChatRequest(String message) {
+        String[] parts = message.split("\\|");
+        if (parts.length == 4) {
+            String sender = parts[1];
+            String address = parts[2];
+            int port = Integer.parseInt(parts[3]);
+            
+            // 确保切换到发送者的私聊对话框
+            privateChatSelector.setSelectedItem(sender);
+            
+            int choice = JOptionPane.showConfirmDialog(this,
+                "收到来自 " + sender + " 的语音聊天请求，是否接受？",
+                "语音聊天请求",
+                JOptionPane.YES_NO_OPTION);
+                
+            if (choice == JOptionPane.YES_OPTION) {
+                try {
+                    voiceChatService.startVoiceChat(address, port);
+                    voiceChatBtn.setText("结束语音");
+                    isInVoiceChat = true;
+                    // 保存当前语音聊天的对象
+                    currentVoiceChatPartner = sender;
+                } catch (Exception e) {
+                    jta.append("启动语音聊天失败: " + e.getMessage() + "\n");
+                }
+            }
+        }
+    }
+
+    private void handleGroupVoiceChatRequest(String message) {
+        String[] parts = message.split("\\|");
+        if (parts.length >= 3) {
+            String groupId = parts[1];
+            String[] members = new String[parts.length - 2];
+            System.arraycopy(parts, 2, members, 0, members.length);
+            
+            int choice = JOptionPane.showConfirmDialog(this,
+                "收到群组 " + groupId + " 的语音聊天请求，是否加入？",
+                "群组语音聊天请求",
+                JOptionPane.YES_NO_OPTION);
+                
+            if (choice == JOptionPane.YES_OPTION) {
+                try {
+                    voiceChatService.startGroupVoiceChat(groupId, members);
+                    groupVoiceChatBtn.setText("结束群语音");
+                    isInVoiceChat = true;
+                } catch (Exception e) {
+                    jta.append("启动群组语音聊天失败: " + e.getMessage() + "\n");
+                }
+            }
+        }
+    }
+
     private void receiveMessages() {
         try {
             while (true) {
@@ -346,8 +493,64 @@ public class ClientGUI extends JFrame implements KeyListener {
                     String content = message.substring(message.indexOf("私聊说:") + 4);
                     clientController.handlePrivateMessage(sender, content);
                     jta.append(message + "\n");
+                } else if (message.startsWith("@@voice|")) {
+                    handleVoiceChatRequest(message);
+                } else if (message.startsWith("@@groupvoice|")) {
+                    handleGroupVoiceChatRequest(message);
+                } else if (message.startsWith("[我与")) {
+                    // 处理发送方看到的私聊消息
+                    String[] parts = message.substring(1).split("]：", 2);
+                    if (parts.length == 2) {
+                        String targetUser = parts[0].substring(2); // 去掉"我与"
+                        String content = parts[1];
+                        // 确保切换到正确的私聊对话框
+                        privateChatSelector.setSelectedItem(targetUser);
+                        jta.append(message + "\n");
+                    }
+                } else if (message.startsWith("[") && message.contains("对我说]：")) {
+                    // 处理接收方看到的私聊消息
+                    String[] parts = message.substring(1).split("对我说]：", 2);
+                    if (parts.length == 2) {
+                        String sender = parts[0];
+                        String content = parts[1];
+                        // 确保切换到正确的私聊对话框
+                        privateChatSelector.setSelectedItem(sender);
+                        jta.append(message + "\n");
+                    }
+                } else if (message.startsWith("@@voiceend|")) {
+                    // 处理语音通话结束消息
+                    String[] parts = message.split("\\|");
+                    if (parts.length == 2) {
+                        String targetUser = parts[1];
+                        voiceChatService.stopVoiceChat();
+                        voiceChatBtn.setText("语音聊天");
+                        isInVoiceChat = false;
+                        currentVoiceChatPartner = null;
+                        jta.append("[系统消息]：语音通话已结束\n");
+                    }
+                } else if (message.startsWith("@@groupvoiceend|")) {
+                    // 处理群组语音通话结束消息
+                    String[] parts = message.split("\\|");
+                    if (parts.length == 2) {
+                        String groupId = parts[1];
+                        String username = parts[2];
+                        if (username.equals(clientController.getName())) {
+                            // 如果是自己退出的消息，不需要处理
+                            continue;
+                        }
+                        jta.append("[系统消息]：" + username + " 退出了群组语音通话\n");
+                        
+                        // 检查是否还有其他人在通话中
+                        if (message.contains("|last|")) {
+                            // 如果是最后一个退出的，结束整个群组语音
+                            voiceChatService.stopVoiceChat();
+                            groupVoiceChatBtn.setText("群组语音");
+                            isInVoiceChat = false;
+                            jta.append("[系统消息]：群组语音通话已结束\n");
+                        }
+                    }
                 } else {
-                    // 处理普通消息
+                    // 处理其他消息
                     jta.append(message + "\n");
                 }
             }

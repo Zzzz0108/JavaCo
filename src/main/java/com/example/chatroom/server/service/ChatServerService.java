@@ -2,6 +2,9 @@ package com.example.chatroom.server.service;
 
 import com.example.chatroom.server.model.ChatGroup;
 import com.example.chatroom.server.model.ClientConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -11,6 +14,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ChatServerService {
+    private static final Logger logger = LoggerFactory.getLogger(ChatServerService.class);
     private int port;
     private ServerSocket serverSocket;
     private boolean isRunning = false;
@@ -326,15 +330,19 @@ public class ChatServerService {
         if (parts.length == 2) {
             String receiverName = parts[0];
             String content = parts[1];
-            String fullMessage = "[" + sender.getName() + "] 私聊说: " + content;
+            
+            // 发送者看到的格式
+            String senderMessage = "[我与" + receiverName + "]：" + content;
+            // 接收者看到的格式
+            String receiverMessage = "[" + sender.getName() + "对我说]：" + content;
 
             // 检查接收者是否是已注册用户
             if (!users.containsKey(receiverName)) {
                 try {
                     String errorMessage = "用户 [" + receiverName + "] 不存在";
-                    sender.getDos().writeUTF(errorMessage);
+                    sender.getDos().writeUTF("[系统消息]：" + errorMessage);
                     sender.getDos().flush();
-                    saveChatLog(sender.getName(), errorMessage);
+                    saveChatLog(sender.getName(), "[系统消息]：" + errorMessage);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -346,11 +354,15 @@ public class ChatServerService {
             for (ClientConnection cc : clientConnections) {
                 if (cc.getName().equals(receiverName)) {
                     try {
-                        cc.getDos().writeUTF(fullMessage);
+                        // 发送者看到的消息
+                        sender.getDos().writeUTF(senderMessage);
+                        sender.getDos().flush();
+                        // 接收者看到的消息
+                        cc.getDos().writeUTF(receiverMessage);
                         cc.getDos().flush();
                         // 保存聊天记录
-                        saveChatLog(receiverName, fullMessage);
-                        saveChatLog(sender.getName(), fullMessage);
+                        saveChatLog(receiverName, receiverMessage);
+                        saveChatLog(sender.getName(), senderMessage);
                         userOnline = true;
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -361,14 +373,14 @@ public class ChatServerService {
 
             // 如果用户不在线，保存为未读消息
             if (!userOnline) {
-                addUnreadMessage(receiverName, fullMessage);
-                saveChatLog(sender.getName(), fullMessage);
+                addUnreadMessage(receiverName, receiverMessage);
+                saveChatLog(sender.getName(), senderMessage);
                 
                 try {
                     String noticeMessage = "用户 [" + receiverName + "] 当前不在线，消息将在其登录后发送";
-                    sender.getDos().writeUTF(noticeMessage);
+                    sender.getDos().writeUTF("[系统消息]：" + noticeMessage);
                     sender.getDos().flush();
-                    saveChatLog(sender.getName(), noticeMessage);
+                    saveChatLog(sender.getName(), "[系统消息]：" + noticeMessage);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -437,8 +449,30 @@ public class ChatServerService {
             groupList.append(group.getGroupId())
                     .append(" - ")
                     .append(group.getGroupName())
-                    .append(" (成员数: ")
-                    .append(group.getMemberCount())
+                    .append(" (成员: ");
+            
+            // 获取所有成员名称
+            List<String> memberNames = new ArrayList<>();
+            
+            // 获取所有成员
+            List<String> allMembers = group.getAllMembers();
+            
+            // 遍历所有成员，检查在线状态
+            for (String member : allMembers) {
+                boolean isOnline = false;
+                // 检查是否在线
+                for (ClientConnection cc : clientConnections) {
+                    if (cc.getName().equals(member)) {
+                        isOnline = true;
+                        break;
+                    }
+                }
+                // 添加成员名称和状态
+                memberNames.add(member + (isOnline ? "(在线)" : "(离线)"));
+            }
+            
+            // 添加成员列表
+            groupList.append(String.join(", ", memberNames))
                     .append(")\n");
         }
         try {
@@ -460,6 +494,18 @@ public class ChatServerService {
                     System.out.println("收到退出命令");
                     handleClientExit(connection);
                     break;
+                } else if (message.startsWith("@@voice|")) {
+                    System.out.println("收到语音聊天请求");
+                    handleVoiceChat(message, connection);
+                } else if (message.startsWith("@@voiceend|")) {
+                    System.out.println("收到语音聊天结束请求");
+                    handleVoiceChatEnd(message, connection);
+                } else if (message.startsWith("@@groupvoice|")) {
+                    System.out.println("收到群组语音聊天请求");
+                    handleGroupVoiceChat(message, connection);
+                } else if (message.startsWith("@@groupvoiceend|")) {
+                    System.out.println("收到群组语音聊天结束请求");
+                    handleGroupVoiceChatEnd(message, connection);
                 } else if (message.startsWith("@@file|")) {
                     System.out.println("收到文件传输请求");
                     handleFileTransfer(message, connection);
@@ -823,5 +869,181 @@ public class ChatServerService {
         if (size < 1024 * 1024) return String.format("%.1f KB", size / 1024.0);
         if (size < 1024 * 1024 * 1024) return String.format("%.1f MB", size / (1024.0 * 1024));
         return String.format("%.1f GB", size / (1024.0 * 1024 * 1024));
+    }
+
+    private void handleVoiceChat(String message, ClientConnection sender) {
+        try {
+            String[] parts = message.split("\\|");
+            if (parts.length == 2) {
+                String targetUsername = parts[1];
+                logger.info("处理语音聊天请求 - 发送者: {}, 目标用户: {}", sender.getUsername(), targetUsername);
+                
+                ClientConnection target = getClientByUsername(targetUsername);
+                
+                if (target != null) {
+                    // 获取发送者的IP和端口
+                    String senderAddress = sender.getSocket().getInetAddress().getHostAddress();
+                    int senderPort = sender.getVoicePort();
+                    logger.info("找到目标用户 - IP: {}, 端口: {}", senderAddress, senderPort);
+                    
+                    // 发送语音聊天请求给目标用户
+                    String voiceRequest = "@@voice|" + sender.getUsername() + "|" + senderAddress + "|" + senderPort;
+                    logger.info("发送语音聊天请求: {}", voiceRequest);
+                    target.getDos().writeUTF(voiceRequest);
+                    target.getDos().flush();
+                    
+                    // 在私聊对话框中显示语音聊天请求
+                    String senderVoiceMessage = "[我与" + targetUsername + "]：发起了语音聊天";
+                    String targetVoiceMessage = "[" + sender.getUsername() + "对我说]：发起了语音聊天";
+                    
+                    // 发送给目标用户
+                    target.getDos().writeUTF(targetVoiceMessage);
+                    target.getDos().flush();
+                    // 发送给发起者
+                    sender.getDos().writeUTF(senderVoiceMessage);
+                    sender.getDos().flush();
+                    
+                    // 保存聊天记录
+                    saveChatLog(target.getUsername(), targetVoiceMessage);
+                    saveChatLog(sender.getUsername(), senderVoiceMessage);
+                } else {
+                    logger.warn("目标用户不在线: {}", targetUsername);
+                    sender.getDos().writeUTF("[系统消息]：用户 [" + targetUsername + "] 不在线");
+                    sender.getDos().flush();
+                }
+            } else {
+                logger.error("语音聊天请求格式错误: {}", message);
+                sender.getDos().writeUTF("[系统消息]：语音聊天请求格式错误");
+                sender.getDos().flush();
+            }
+        } catch (IOException e) {
+            logger.error("处理语音聊天请求失败", e);
+            try {
+                sender.getDos().writeUTF("[系统消息]：处理语音聊天请求失败 - " + e.getMessage());
+                sender.getDos().flush();
+            } catch (IOException ex) {
+                logger.error("发送错误消息失败", ex);
+            }
+        }
+    }
+
+    private void handleVoiceChatEnd(String message, ClientConnection sender) {
+        try {
+            String[] parts = message.split("\\|");
+            if (parts.length == 2) {
+                String targetUsername = parts[1];
+                ClientConnection target = getClientByUsername(targetUsername);
+                
+                if (target != null) {
+                    // 发送语音结束消息给双方
+                    String endMessage = "@@voiceend|" + sender.getUsername();
+                    target.getDos().writeUTF(endMessage);
+                    target.getDos().flush();
+                    
+                    // 在私聊对话框中显示语音结束消息
+                    String senderMessage = "[我与" + targetUsername + "]：语音通话已结束";
+                    String targetMessage = "[" + sender.getUsername() + "对我说]：语音通话已结束";
+                    
+                    // 发送给双方
+                    sender.getDos().writeUTF(senderMessage);
+                    sender.getDos().flush();
+                    target.getDos().writeUTF(targetMessage);
+                    target.getDos().flush();
+                    
+                    // 保存聊天记录
+                    saveChatLog(sender.getUsername(), senderMessage);
+                    saveChatLog(target.getUsername(), targetMessage);
+                }
+            }
+        } catch (IOException e) {
+            logger.error("处理语音聊天结束请求失败", e);
+        }
+    }
+
+    private void handleGroupVoiceChat(String message, ClientConnection sender) {
+        try {
+            String[] parts = message.split("\\|");
+            if (parts.length == 2) {
+                String groupId = parts[1];
+                ChatGroup group = groups.get(groupId);
+                
+                if (group != null && group.hasMember(sender.getUsername())) {
+                    // 获取发送者的IP和端口
+                    String senderAddress = sender.getSocket().getInetAddress().getHostAddress();
+                    int senderPort = sender.getVoicePort();
+                    
+                    // 构建群组成员列表
+                    StringBuilder memberList = new StringBuilder();
+                    for (ClientConnection member : group.getOnlineMembers()) {
+                        if (!member.getUsername().equals(sender.getUsername())) {
+                            memberList.append(member.getUsername()).append("|");
+                            memberList.append(member.getSocket().getInetAddress().getHostAddress()).append("|");
+                            memberList.append(member.getVoicePort()).append("|");
+                        }
+                    }
+                    
+                    // 发送群组语音聊天请求给所有成员
+                    String request = "@@groupvoice|" + groupId + "|" + memberList.toString();
+                    for (ClientConnection member : group.getOnlineMembers()) {
+                        if (!member.getUsername().equals(sender.getUsername())) {
+                            member.getDos().writeUTF(request);
+                        }
+                    }
+                } else {
+                    sender.getDos().writeUTF("系统消息：群组不存在或您不是群组成员");
+                }
+            }
+        } catch (IOException e) {
+            logger.error("处理群组语音聊天请求失败", e);
+        }
+    }
+
+    private void handleGroupVoiceChatEnd(String message, ClientConnection sender) {
+        try {
+            String[] parts = message.split("\\|");
+            if (parts.length == 2) {
+                String groupId = parts[1];
+                ChatGroup group = groups.get(groupId);
+                
+                if (group != null) {
+                    // 获取当前在线的群组成员数量
+                    int onlineMembers = group.getOnlineMembers().size();
+                    
+                    // 发送退出消息给其他成员
+                    String endMessage = "@@groupvoiceend|" + groupId + "|" + sender.getUsername();
+                    if (onlineMembers <= 1) {
+                        // 如果是最后一个成员，添加last标记
+                        endMessage += "|last|";
+                    }
+                    
+                    for (ClientConnection member : group.getOnlineMembers()) {
+                        if (!member.getUsername().equals(sender.getUsername())) {
+                            member.getDos().writeUTF(endMessage);
+                            member.getDos().flush();
+                        }
+                    }
+                    
+                    // 在群组中显示退出消息
+                    String groupMessage = "[" + sender.getUsername() + "] 退出了群组语音通话";
+                    broadcastToGroup(groupId, groupMessage);
+                    
+                    // 如果是最后一个成员，显示通话结束消息
+                    if (onlineMembers <= 1) {
+                        broadcastToGroup(groupId, "群组语音通话已结束");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            logger.error("处理群组语音聊天结束请求失败", e);
+        }
+    }
+
+    private ClientConnection getClientByUsername(String username) {
+        for (ClientConnection cc : clientConnections) {
+            if (cc.getName().equals(username)) {
+                return cc;
+            }
+        }
+        return null;
     }
 }

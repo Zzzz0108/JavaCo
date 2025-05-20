@@ -9,13 +9,13 @@ public class ChatGroup {
     private final String groupId;
     private final String groupName;
     private final List<ClientConnection> onlineMembers;
-    private final Set<String> allMembers;  // 存储所有成员的用户名
+    private final Set<String> members;  // 存储所有成员的用户名
 
     public ChatGroup(String groupId, String groupName) {
         this.groupId = groupId;
         this.groupName = groupName;
         this.onlineMembers = new ArrayList<>();
-        this.allMembers = new HashSet<>();
+        this.members = new HashSet<>();
     }
 
     public String getGroupId() {
@@ -30,24 +30,24 @@ public class ChatGroup {
         return onlineMembers;
     }
 
-    public Set<String> getAllMembers() {
-        return allMembers;
+    public List<String> getAllMembers() {
+        return new ArrayList<>(members);
     }
 
     public int getMemberCount() {
-        return allMembers.size();
+        return members.size();
     }
 
     public void addMember(ClientConnection member) {
-        if (!onlineMembers.contains(member)) {
-            onlineMembers.add(member);
-            allMembers.add(member.getName());
+        if (!members.contains(member.getName())) {
+            members.add(member.getName());
         }
+        onlineMembers.add(member);
     }
 
     public void removeMember(ClientConnection member) {
         onlineMembers.remove(member);
-        // 注意：这里不删除 allMembers 中的用户名，因为我们要保持成员记录
+        // 不要从members中移除，保持群组成员记录
     }
 
     public boolean hasMember(ClientConnection member) {
@@ -55,35 +55,34 @@ public class ChatGroup {
     }
 
     public boolean hasMember(String username) {
-        return allMembers.contains(username);
+        return members.contains(username);
     }
 
     // 添加成员（通过用户名）
     public void addMemberByName(String username) {
-        allMembers.add(username);
+        members.add(username);
     }
 
     // 移除成员（通过用户名）
     public void removeMemberByName(String username) {
-        allMembers.remove(username);
+        members.remove(username);
     }
 
     // 获取群组信息的字符串表示（用于保存到文件）
     public String toFileString() {
-        return groupId + "," + groupName + "," + String.join(";", allMembers);
+        return groupId + "," + groupName + "," + String.join(";", members);
     }
 
     // 从文件字符串创建群组
     public static ChatGroup fromFileString(String line) {
         String[] parts = line.split(",");
-        if (parts.length >= 2) {
+        if (parts.length >= 3) {
             ChatGroup group = new ChatGroup(parts[0], parts[1]);
-            if (parts.length > 2) {
-                String[] members = parts[2].split(";");
-                for (String member : members) {
-                    if (!member.isEmpty()) {
-                        group.addMemberByName(member);
-                    }
+            // 添加所有成员
+            String[] memberNames = parts[2].split(";");
+            for (String memberName : memberNames) {
+                if (!memberName.isEmpty()) {
+                    group.members.add(memberName);
                 }
             }
             return group;

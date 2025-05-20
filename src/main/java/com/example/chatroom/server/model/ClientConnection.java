@@ -11,6 +11,7 @@ public class ClientConnection {
     private String name;
     private String anonymousName;
     private boolean isAnonymous = false;
+    private int voicePort;
 
     public ClientConnection(Socket socket, DataInputStream dis, DataOutputStream dos) {
         System.out.println("创建新的客户端连接: " + socket.getInetAddress().getHostAddress());
@@ -19,6 +20,7 @@ public class ClientConnection {
         this.dos = dos;
         this.anonymousName = "匿名用户" + (int) (Math.random() * 10000);
         System.out.println("客户端连接创建完成，匿名名称: " + this.anonymousName);
+        this.voicePort = 8888;
     }
 
     // Getters and Setters
@@ -26,6 +28,7 @@ public class ClientConnection {
     public DataInputStream getDis() { return dis; }
     public DataOutputStream getDos() { return dos; }
     public String getName() { return name; }
+    public String getUsername() { return name; }
     public void setName(String name) { 
         System.out.println("设置客户端名称: " + name);
         this.name = name; 
@@ -35,5 +38,13 @@ public class ClientConnection {
     public void setAnonymous(boolean anonymous) { 
         System.out.println("设置客户端匿名状态: " + anonymous);
         isAnonymous = anonymous; 
+    }
+
+    public void setVoicePort(int port) {
+        this.voicePort = port;
+    }
+
+    public int getVoicePort() {
+        return voicePort;
     }
 }
