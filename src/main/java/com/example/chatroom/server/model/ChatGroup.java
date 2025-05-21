@@ -27,7 +27,8 @@ public class ChatGroup {
     }
 
     public List<ClientConnection> getOnlineMembers() {
-        return onlineMembers;
+        // 直接返回onlineMembers列表，因为它在用户连接和断开时已经被正确维护
+        return new ArrayList<>(onlineMembers);
     }
 
     public List<String> getAllMembers() {
@@ -42,6 +43,9 @@ public class ChatGroup {
         System.out.println("添加成员到群组 - 成员名: " + member.getName());
         System.out.println("添加前成员数: " + members.size());
         System.out.println("添加前在线成员数: " + onlineMembers.size());
+        System.out.println("添加前在线成员列表: " + onlineMembers.stream()
+                .map(ClientConnection::getName)
+                .collect(java.util.stream.Collectors.joining(", ")));
         
         // 先添加到成员集合
         if (!members.contains(member.getName())) {
@@ -49,26 +53,24 @@ public class ChatGroup {
             System.out.println("添加到成员集合");
         }
         
-        // 再添加到在线成员列表
-        boolean alreadyOnline = false;
-        for (ClientConnection onlineMember : onlineMembers) {
-            if (onlineMember.getName().equals(member.getName())) {
-                alreadyOnline = true;
-                break;
-            }
-        }
+        // 检查并移除旧的连接（如果存在）
+        onlineMembers.removeIf(m -> m != null && m.getName().equals(member.getName()));
         
-        if (!alreadyOnline) {
-            onlineMembers.add(member);
-            System.out.println("添加到在线成员列表");
-        }
+        // 添加到在线成员列表
+        onlineMembers.add(member);
+        System.out.println("添加到在线成员列表");
         
         System.out.println("添加后成员数: " + members.size());
         System.out.println("添加后在线成员数: " + onlineMembers.size());
+        System.out.println("添加后在线成员列表: " + onlineMembers.stream()
+                .map(ClientConnection::getName)
+                .collect(java.util.stream.Collectors.joining(", ")));
     }
 
     public void removeMember(ClientConnection member) {
-        onlineMembers.remove(member);
+        if (member != null) {
+            onlineMembers.removeIf(m -> m != null && m.getName().equals(member.getName()));
+        }
         // 不要从members中移除，保持群组成员记录
     }
 

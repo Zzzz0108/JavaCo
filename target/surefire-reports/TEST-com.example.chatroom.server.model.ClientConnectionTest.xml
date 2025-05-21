@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.example.chatroom.server.service.ChatServerServiceTest" time="0.032" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.example.chatroom.server.model.ClientConnectionTest" time="0.231" tests="3" errors="3" skipped="0" failures="0">
   <properties>
     <property name="socksProxyHost" value="127.0.0.1"/>
     <property name="http.proxyHost" value="127.0.0.1"/>
@@ -15,7 +15,7 @@
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="CN"/>
     <property name="sun.boot.library.path" value="/opt/homebrew/Cellar/openjdk/23.0.2/libexec/openjdk.jdk/Contents/Home/lib"/>
-    <property name="sun.java.command" value="/Users/apple/Desktop/chatroom/target/surefire/surefirebooter11699585140188293833.jar /Users/apple/Desktop/chatroom/target/surefire 2025-05-21T17-00-38_907-jvmRun1 surefire15990823829648525464tmp surefire_014065598171866086347tmp"/>
+    <property name="sun.java.command" value="/Users/apple/Desktop/chatroom/target/surefire/surefirebooter16056791475954928955.jar /Users/apple/Desktop/chatroom/target/surefire 2025-05-21T16-58-42_388-jvmRun1 surefire633419201380487341tmp surefire_017230464553804140275tmp"/>
     <property name="http.nonProxyHosts" value="192.168.0.0/16|*.192.168.0.0/16|10.0.0.0/8|*.10.0.0.0/8|172.16.0.0/12|*.172.16.0.0/12|127.0.0.1|localhost|*.localhost|local|*.local|timestamp.apple.com|*.timestamp.apple.com|sequoia.apple.com|*.sequoia.apple.com|seed-sequoia.siri.apple.com|*.seed-sequoia.siri.apple.com"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="/Users/apple/Desktop/chatroom/target/test-classes:/Users/apple/Desktop/chatroom/target/classes:/Users/apple/.m2/repository/org/openjfx/javafx-swing/17.0.2/javafx-swing-17.0.2.jar:/Users/apple/.m2/repository/org/openjfx/javafx-swing/17.0.2/javafx-swing-17.0.2-mac-aarch64.jar:/Users/apple/.m2/repository/org/openjfx/javafx-graphics/17.0.2/javafx-graphics-17.0.2.jar:/Users/apple/.m2/repository/org/openjfx/javafx-graphics/17.0.2/javafx-graphics-17.0.2-mac-aarch64.jar:/Users/apple/.m2/repository/org/openjfx/javafx-base/17.0.2/javafx-base-17.0.2.jar:/Users/apple/.m2/repository/org/openjfx/javafx-base/17.0.2/javafx-base-17.0.2-mac-aarch64.jar:/Users/apple/.m2/repository/org/slf4j/slf4j-api/1.7.36/slf4j-api-1.7.36.jar:/Users/apple/.m2/repository/ch/qos/logback/logback-classic/1.2.11/logback-classic-1.2.11.jar:/Users/apple/.m2/repository/ch/qos/logback/logback-core/1.2.11/logback-core-1.2.11.jar:/Users/apple/.m2/repository/org/junit/jupiter/junit-jupiter-api/5.8.2/junit-jupiter-api-5.8.2.jar:/Users/apple/.m2/repository/org/opentest4j/opentest4j/1.2.0/opentest4j-1.2.0.jar:/Users/apple/.m2/repository/org/junit/platform/junit-platform-commons/1.8.2/junit-platform-commons-1.8.2.jar:/Users/apple/.m2/repository/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar:/Users/apple/.m2/repository/org/junit/jupiter/junit-jupiter-engine/5.8.2/junit-jupiter-engine-5.8.2.jar:/Users/apple/.m2/repository/org/junit/platform/junit-platform-engine/1.8.2/junit-platform-engine-1.8.2.jar:/Users/apple/.m2/repository/org/mockito/mockito-core/4.5.1/mockito-core-4.5.1.jar:/Users/apple/.m2/repository/net/bytebuddy/byte-buddy/1.12.9/byte-buddy-1.12.9.jar:/Users/apple/.m2/repository/net/bytebuddy/byte-buddy-agent/1.12.9/byte-buddy-agent-1.12.9.jar:/Users/apple/.m2/repository/org/objenesis/objenesis/3.2/objenesis-3.2.jar:/Users/apple/.m2/repository/ws/schild/jave-core/3.3.1/jave-core-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-all-deps/3.3.1/jave-all-deps-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-win32/3.3.1/jave-nativebin-win32-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-win64/3.3.1/jave-nativebin-win64-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-linux32/3.3.1/jave-nativebin-linux32-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-linux64/3.3.1/jave-nativebin-linux64-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-osx64/3.3.1/jave-nativebin-osx64-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-osxm1/3.3.1/jave-nativebin-osxm1-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-linux-arm32/3.3.1/jave-nativebin-linux-arm32-3.3.1.jar:/Users/apple/.m2/repository/ws/schild/jave-nativebin-linux-arm64/3.3.1/jave-nativebin-linux-arm64-3.3.1.jar:"/>
@@ -33,7 +33,7 @@
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
     <property name="apple.awt.application.name" value="ForkedBooter"/>
-    <property name="surefire.real.class.path" value="/Users/apple/Desktop/chatroom/target/surefire/surefirebooter11699585140188293833.jar"/>
+    <property name="surefire.real.class.path" value="/Users/apple/Desktop/chatroom/target/surefire/surefirebooter16056791475954928955.jar"/>
     <property name="user.script" value="Hans"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="ftp.nonProxyHosts" value="192.168.0.0/16|*.192.168.0.0/16|10.0.0.0/8|*.10.0.0.0/8|172.16.0.0/12|*.172.16.0.0/12|127.0.0.1|localhost|*.localhost|local|*.local|timestamp.apple.com|*.timestamp.apple.com|sequoia.apple.com|*.sequoia.apple.com|seed-sequoia.siri.apple.com|*.seed-sequoia.siri.apple.com"/>
@@ -65,5 +65,31 @@
     <property name="java.class.version" value="67.0"/>
     <property name="http.proxyPort" value="7890"/>
   </properties>
-  <testcase name="testCreateGroup" classname="com.example.chatroom.server.service.ChatServerServiceTest" time="0.032"/>
+  <testcase name="testAnonymousMode" classname="com.example.chatroom.server.model.ClientConnectionTest" time="0.224">
+    <error message="&#10;Cannot mock/spy class java.net.InetAddress&#10;Mockito cannot mock/spy because :&#10; - sealed class" type="org.mockito.exceptions.base.MockitoException">org.mockito.exceptions.base.MockitoException: 
+
+Cannot mock/spy class java.net.InetAddress
+Mockito cannot mock/spy because :
+ - sealed class
+	at com.example.chatroom.server.model.ClientConnectionTest.setUp(ClientConnectionTest.java:22)
+</error>
+  </testcase>
+  <testcase name="testSetAndGetName" classname="com.example.chatroom.server.model.ClientConnectionTest" time="0">
+    <error message="&#10;Cannot mock/spy class java.net.InetAddress&#10;Mockito cannot mock/spy because :&#10; - sealed class" type="org.mockito.exceptions.base.MockitoException">org.mockito.exceptions.base.MockitoException: 
+
+Cannot mock/spy class java.net.InetAddress
+Mockito cannot mock/spy because :
+ - sealed class
+	at com.example.chatroom.server.model.ClientConnectionTest.setUp(ClientConnectionTest.java:22)
+</error>
+  </testcase>
+  <testcase name="testVoicePort" classname="com.example.chatroom.server.model.ClientConnectionTest" time="0.001">
+    <error message="&#10;Cannot mock/spy class java.net.InetAddress&#10;Mockito cannot mock/spy because :&#10; - sealed class" type="org.mockito.exceptions.base.MockitoException">org.mockito.exceptions.base.MockitoException: 
+
+Cannot mock/spy class java.net.InetAddress
+Mockito cannot mock/spy because :
+ - sealed class
+	at com.example.chatroom.server.model.ClientConnectionTest.setUp(ClientConnectionTest.java:22)
+</error>
+  </testcase>
 </testsuite>

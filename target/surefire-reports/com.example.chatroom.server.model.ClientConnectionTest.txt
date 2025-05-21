@@ -1,0 +1,28 @@
+-------------------------------------------------------------------------------
+Test set: com.example.chatroom.server.model.ClientConnectionTest
+-------------------------------------------------------------------------------
+Tests run: 3, Failures: 0, Errors: 3, Skipped: 0, Time elapsed: 0.231 s <<< FAILURE! - in com.example.chatroom.server.model.ClientConnectionTest
+testAnonymousMode  Time elapsed: 0.224 s  <<< ERROR!
+org.mockito.exceptions.base.MockitoException: 
+
+Cannot mock/spy class java.net.InetAddress
+Mockito cannot mock/spy because :
+ - sealed class
+	at com.example.chatroom.server.model.ClientConnectionTest.setUp(ClientConnectionTest.java:22)
+
+testSetAndGetName  Time elapsed: 0 s  <<< ERROR!
+org.mockito.exceptions.base.MockitoException: 
+
+Cannot mock/spy class java.net.InetAddress
+Mockito cannot mock/spy because :
+ - sealed class
+	at com.example.chatroom.server.model.ClientConnectionTest.setUp(ClientConnectionTest.java:22)
+
+testVoicePort  Time elapsed: 0.001 s  <<< ERROR!
+org.mockito.exceptions.base.MockitoException: 
+
+Cannot mock/spy class java.net.InetAddress
+Mockito cannot mock/spy because :
+ - sealed class
+	at com.example.chatroom.server.model.ClientConnectionTest.setUp(ClientConnectionTest.java:22)
+

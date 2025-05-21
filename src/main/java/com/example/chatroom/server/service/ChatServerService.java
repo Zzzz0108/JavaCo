@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
@@ -165,11 +166,25 @@ public class ChatServerService {
         if (group != null) {
             System.out.println("找到群组，当前成员数: " + group.getMemberCount());
             System.out.println("当前在线成员数: " + group.getOnlineMembers().size());
+            System.out.println("当前在线成员列表: " + group.getOnlineMembers().stream()
+                    .map(ClientConnection::getName)
+                    .collect(java.util.stream.Collectors.joining(", ")));
             
-            group.addMember(client);
+            // 检查用户是否已经在群组中
+            if (group.hasMember(client)) {
+                System.out.println("用户已经在群组中，更新在线状态");
+                group.addMember(client); // 重新添加以更新在线状态
+            } else {
+                System.out.println("用户不在群组中，添加新成员");
+                group.addMember(client);
+            }
+            
             System.out.println("用户 " + client.getName() + " 成功加入群组 " + groupId);
             System.out.println("加入后成员数: " + group.getMemberCount());
             System.out.println("加入后在线成员数: " + group.getOnlineMembers().size());
+            System.out.println("加入后在线成员列表: " + group.getOnlineMembers().stream()
+                    .map(ClientConnection::getName)
+                    .collect(java.util.stream.Collectors.joining(", ")));
             
             broadcastToGroup(groupId, client.getName() + " 加入了群组");
             saveGroups(); // 保存群组信息
@@ -228,7 +243,7 @@ public class ChatServerService {
         isRunning = true;
         new Thread(() -> {
             try {
-                serverSocket = new ServerSocket(port);
+                serverSocket = new ServerSocket(port, 0, InetAddress.getByName("0.0.0.0"));;
                 while (isRunning) {
                     Socket socket = serverSocket.accept();
                     DataInputStream dis = new DataInputStream(socket.getInputStream());
@@ -416,6 +431,11 @@ public class ChatServerService {
                     // 使用简单的消息格式
                     String fullMessage = "[" + displayName + "：" + content + "]";
                     System.out.println("准备广播群组消息: " + fullMessage);
+                    System.out.println("群组 " + groupId + " 的在线成员数: " + group.getOnlineMembers().size());
+                    System.out.println("群组 " + groupId + " 的所有成员: " + group.getAllMembers());
+                    System.out.println("群组 " + groupId + " 的在线成员: " + group.getOnlineMembers().stream()
+                            .map(ClientConnection::getName)
+                            .collect(java.util.stream.Collectors.joining(", ")));
                     
                     // 获取所有群组成员
                     List<String> allMembers = group.getAllMembers();
@@ -629,12 +649,26 @@ public class ChatServerService {
     }
 
     private void handleClientExit(ClientConnection connection) {
+        // 从所有群组中移除该用户的在线状态
+        for (ChatGroup group : groups.values()) {
+            if (group.hasMember(connection)) {
+                group.removeMember(connection);
+            }
+        }
+        
         clientConnections.remove(connection);
         broadcast(connection.getName() + " 退出了聊天室");
         logToFile("用户退出: 用户[" + connection.getName() + "], 时间: " + getCurrentTime());
     }
 
     private void handleClientQuit(ClientConnection connection) throws IOException {
+        // 从所有群组中移除该用户的在线状态
+        for (ChatGroup group : groups.values()) {
+            if (group.hasMember(connection)) {
+                group.removeMember(connection);
+            }
+        }
+        
         clientConnections.remove(connection);
         broadcast(connection.getName() + " 请求退出聊天室");
         connection.getDos().writeUTF("##exit");
@@ -771,6 +805,7 @@ public class ChatServerService {
     private void listAllUsersForClient(ClientConnection connection) {
         StringBuilder allUsers = new StringBuilder("全部用户：");
         boolean isFirst = true;
+        System.out.println("当前用户映射: " + users); // 添加调试信息
         for (String username : users.keySet()) {
             if (!isFirst) {
                 allUsers.append(" ");
@@ -1035,6 +1070,13 @@ public class ChatServerService {
                 String groupId = parts[1];
                 ChatGroup group = groups.get(groupId);
                 
+                System.out.println("处理群组语音聊天请求 - 群组ID: " + groupId);
+                System.out.println("群组是否存在: " + (group != null));
+                if (group != null) {
+                    System.out.println("发送者是否是群组成员: " + group.hasMember(sender.getUsername()));
+                    System.out.println("群组所有成员: " + group.getAllMembers());
+                }
+                
                 if (group != null && group.hasMember(sender.getUsername())) {
                     // 获取发送者的IP和端口
                     String senderAddress = sender.getSocket().getInetAddress().getHostAddress();
@@ -1042,23 +1084,58 @@ public class ChatServerService {
                     
                     // 构建群组成员列表
                     StringBuilder memberList = new StringBuilder();
-                    for (ClientConnection member : group.getOnlineMembers()) {
-                        if (!member.getUsername().equals(sender.getUsername())) {
-                            memberList.append(member.getUsername()).append("|");
-                            memberList.append(member.getSocket().getInetAddress().getHostAddress()).append("|");
-                            memberList.append(member.getVoicePort()).append("|");
+                    List<String> onlineMembers = new ArrayList<>();
+                    
+                    // 检查所有群组成员中谁在线
+                    for (String memberName : group.getAllMembers()) {
+                        // 跳过发送者自己
+                        if (memberName.equals(sender.getUsername())) {
+                            continue;
+                        }
+                        
+                        // 检查成员是否在线
+                        for (ClientConnection cc : clientConnections) {
+                            if (cc.getName().equals(memberName)) {
+                                onlineMembers.add(memberName);
+                                memberList.append(memberName).append("|");
+                                memberList.append(cc.getSocket().getInetAddress().getHostAddress()).append("|");
+                                memberList.append(cc.getVoicePort()).append("|");
+                                System.out.println("添加在线成员到列表: " + memberName);
+                                break;
+                            }
                         }
                     }
                     
-                    // 发送群组语音聊天请求给所有成员
-                    String request = "@@groupvoice|" + groupId + "|" + memberList.toString();
-                    for (ClientConnection member : group.getOnlineMembers()) {
-                        if (!member.getUsername().equals(sender.getUsername())) {
-                            member.getDos().writeUTF(request);
+                    System.out.println("在线成员列表: " + onlineMembers);
+                    
+                    // 发送群组语音聊天请求给所有在线成员
+                    String request = "@@groupvoice|" + groupId + "|" + sender.getUsername() + "|" + senderAddress + "|" + senderPort + "|" + memberList.toString();
+                    System.out.println("发送请求: " + request);
+                    
+                    // 发送给所有在线成员
+                    for (String memberName : onlineMembers) {
+                        for (ClientConnection cc : clientConnections) {
+                            if (cc.getName().equals(memberName)) {
+                                System.out.println("发送请求给成员: " + memberName);
+                                cc.getDos().writeUTF(request);
+                                cc.getDos().flush();
+                                
+                                // 在群组中显示语音聊天请求
+                                String voiceMessage = "[" + sender.getUsername() + "] 发起了群组语音聊天";
+                                cc.getDos().writeUTF(voiceMessage);
+                                cc.getDos().flush();
+                                break;
+                            }
                         }
                     }
+                    
+                    // 发送给发起者
+                    String senderMessage = "[我与群组" + groupId + "]：发起了群组语音聊天";
+                    sender.getDos().writeUTF(senderMessage);
+                    sender.getDos().flush();
                 } else {
-                    sender.getDos().writeUTF("系统消息：群组不存在或您不是群组成员");
+                    sender.getDos().writeUTF("[系统消息]：群组不存在或您不是群组成员");
+                    sender.getDos().flush();
                 }
             }
         } catch (IOException e) {

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.example.chatroom.server.service.ChatServerServiceTest" time="0.032" tests="1" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" name="com.example.chatroom.server.model.ChatGroupTest" time="0.015" tests="3" errors="0" skipped="0" failures="0">
   <properties>
     <property name="socksProxyHost" value="127.0.0.1"/>
     <property name="http.proxyHost" value="127.0.0.1"/>
@@ -65,5 +65,7 @@
     <property name="java.class.version" value="67.0"/>
     <property name="http.proxyPort" value="7890"/>
   </properties>
-  <testcase name="testCreateGroup" classname="com.example.chatroom.server.service.ChatServerServiceTest" time="0.032"/>
+  <testcase name="testFromFileString" classname="com.example.chatroom.server.model.ChatGroupTest" time="0.008"/>
+  <testcase name="testToFileString" classname="com.example.chatroom.server.model.ChatGroupTest" time="0.003"/>
+  <testcase name="testInvalidFromFileString" classname="com.example.chatroom.server.model.ChatGroupTest" time="0.001"/>
 </testsuite>

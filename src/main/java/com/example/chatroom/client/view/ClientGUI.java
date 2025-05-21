@@ -70,11 +70,8 @@ public class ClientGUI extends JFrame implements KeyListener {
         JPanel privateChatPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 2, 0));
         privateChatSelector = new JComboBox<>(new String[]{"选择私聊对象"});
         privateChatSelector.setPreferredSize(new Dimension(150, 30));
-        JButton refreshUsersBtn = new JButton("刷新用户列表");
-        refreshUsersBtn.setPreferredSize(new Dimension(100, 30));
         privateChatPanel.add(new JLabel("私聊对象："));
         privateChatPanel.add(privateChatSelector);
-        privateChatPanel.add(refreshUsersBtn);
         topPanel.add(privateChatPanel, BorderLayout.CENTER);
 
         // 右侧：群组控制按钮和语音聊天按钮
@@ -144,16 +141,6 @@ public class ClientGUI extends JFrame implements KeyListener {
 
         add(mainPanel);
 
-        // 添加刷新用户列表按钮的事件监听
-        refreshUsersBtn.addActionListener(e -> {
-            try {
-                // 请求全部用户列表而不是在线用户列表
-                clientController.handleSystemCommand("@@allusers");
-            } catch (IOException ex) {
-                jta.append("获取用户列表失败: " + ex.getMessage() + "\n");
-            }
-        });
-
         // 添加群组控制按钮的事件监听
         createGroupButton.addActionListener(e -> {
             String groupId = JOptionPane.showInputDialog(this, "请输入新群组ID:");
@@ -199,6 +186,14 @@ public class ClientGUI extends JFrame implements KeyListener {
             }
         });
 
+        listUsersButton.addActionListener(e -> {
+            try {
+                clientController.handleSystemCommand("@@list");
+            } catch (IOException ex) {
+                jta.append("获取在线用户列表失败: " + ex.getMessage() + "\n");
+            }
+        });
+
         anonymousButton.addActionListener(e -> {
             try {
                 clientController.handleSystemCommand("@@anonymous");
@@ -228,8 +223,9 @@ public class ClientGUI extends JFrame implements KeyListener {
             try {
                 if (clientController.login(name, password)) {
                     setTitle("聊天室-" + name);
-                    // 登录成功后立即获取群组列表
+                    // 登录成功后立即获取群组列表和用户列表
                     clientController.handleSystemCommand("@@groups");
+                    clientController.handleSystemCommand("@@allusers");
                     break;
                 } else {
                     JOptionPane.showMessageDialog(this, "用户名或密码错误，请重新输入。");
@@ -377,26 +373,58 @@ public class ClientGUI extends JFrame implements KeyListener {
     }
 
     private void handleGroupVoiceChatRequest(String message) {
+        System.out.println("开始处理群组语音聊天请求: " + message);
         String[] parts = message.split("\\|");
-        if (parts.length >= 3) {
+        System.out.println("消息部分数量: " + parts.length);
+        if (parts.length >= 5) {
             String groupId = parts[1];
-            String[] members = new String[parts.length - 2];
-            System.arraycopy(parts, 2, members, 0, members.length);
+            String sender = parts[2];
+            String senderAddress = parts[3];
+            int senderPort = Integer.parseInt(parts[4]);
+            
+            System.out.println("解析请求信息 - 群组ID: " + groupId + ", 发送者: " + sender + 
+                             ", 地址: " + senderAddress + ", 端口: " + senderPort);
+            
+            // 确保切换到正确的群组
+            groupSelector.setSelectedItem(groupId);
             
             int choice = JOptionPane.showConfirmDialog(this,
-                "收到群组 " + groupId + " 的语音聊天请求，是否加入？",
+                "收到来自 " + sender + " 的群组语音聊天请求，是否加入？",
                 "群组语音聊天请求",
                 JOptionPane.YES_NO_OPTION);
                 
             if (choice == JOptionPane.YES_OPTION) {
                 try {
-                    voiceChatService.startGroupVoiceChat(groupId, members);
+                    System.out.println("用户接受群组语音聊天请求");
+                    // 先连接到发起者
+                    voiceChatService.startVoiceChat(senderAddress, senderPort);
+                    
+                    // 如果有其他成员，也连接到他们
+                    if (parts.length > 5) {
+                        System.out.println("处理其他成员连接");
+                        for (int i = 5; i < parts.length; i += 3) {
+                            if (i + 2 < parts.length) {
+                                String memberAddress = parts[i + 1];
+                                int memberPort = Integer.parseInt(parts[i + 2]);
+                                System.out.println("添加成员到群组语音: " + memberAddress + ":" + memberPort);
+                                voiceChatService.addMemberToGroup(memberAddress, memberPort);
+                            }
+                        }
+                    }
+                    
                     groupVoiceChatBtn.setText("结束群语音");
                     isInVoiceChat = true;
+                    jta.append("[系统消息]：您已加入群组语音通话\n");
                 } catch (Exception e) {
+                    System.err.println("启动群组语音聊天失败: " + e.getMessage());
+                    e.printStackTrace();
                     jta.append("启动群组语音聊天失败: " + e.getMessage() + "\n");
                 }
+            } else {
+                System.out.println("用户拒绝群组语音聊天请求");
             }
+        } else {
+            System.err.println("群组语音聊天请求格式错误: " + message);
         }
     }
 
@@ -412,6 +440,14 @@ public class ClientGUI extends JFrame implements KeyListener {
                     jta.append(message.substring("[历史记录]".length()) + "\n");
                 } else if (message.startsWith("@@file|")) {
                     handleFileReceive(message);
+                } else if (message.startsWith("在线用户：")) {
+                    // 处理在线用户列表消息
+                    System.out.println("收到在线用户列表: " + message);
+                    jta.append(message + "\n");
+                } else if (message.startsWith("全部用户：")) {
+                    // 处理全部用户列表消息
+                    System.out.println("收到全部用户列表: " + message);
+                    updatePrivateChatSelector(message.substring("全部用户：".length()));
                 } else if (message.startsWith("可用群组：")) {
                     // 处理群组列表消息
                     String[] lines = message.split("\n");
@@ -498,6 +534,27 @@ public class ClientGUI extends JFrame implements KeyListener {
                         groupTextAreas.remove(groupId);
                     }
                     jta.append(message + "\n");
+                } else if (message.startsWith("@@voice|")) {
+                    // 处理语音聊天请求
+                    System.out.println("收到语音聊天请求: " + message);
+                    handleVoiceChatRequest(message);
+                } else if (message.startsWith("@@voiceend|")) {
+                    // 处理语音聊天结束请求
+                    System.out.println("收到语音聊天结束请求: " + message);
+                    voiceChatService.stopVoiceChat();
+                    voiceChatBtn.setText("语音聊天");
+                    isInVoiceChat = false;
+                    currentVoiceChatPartner = null;
+                } else if (message.startsWith("@@groupvoice|")) {
+                    // 处理群组语音聊天请求
+                    System.out.println("收到群组语音聊天请求: " + message);
+                    handleGroupVoiceChatRequest(message);
+                } else if (message.startsWith("@@groupvoiceend|")) {
+                    // 处理群组语音聊天结束请求
+                    System.out.println("收到群组语音聊天结束请求: " + message);
+                    voiceChatService.stopVoiceChat();
+                    groupVoiceChatBtn.setText("群组语音");
+                    isInVoiceChat = false;
                 } else {
                     jta.append(message + "\n");
                 }
@@ -553,6 +610,11 @@ public class ClientGUI extends JFrame implements KeyListener {
         privateChatSelector.removeAllItems();
         privateChatSelector.addItem("选择私聊对象");
         
+        if (usersList == null || usersList.trim().isEmpty()) {
+            System.out.println("警告：收到的用户列表为空");
+            return;
+        }
+        
         String[] users = usersList.split("\\s+");
         System.out.println("解析出的用户数量: " + users.length);
         for (String user : users) {
@@ -572,6 +634,8 @@ public class ClientGUI extends JFrame implements KeyListener {
                 }
             }
         }
+        
+        System.out.println("更新后的下拉框项目数: " + privateChatSelector.getItemCount());
     }
 
     private void sendGroupFile(String groupId, File file) throws IOException {
