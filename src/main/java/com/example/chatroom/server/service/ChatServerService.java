@@ -885,7 +885,7 @@ public class ChatServerService {
                     for (String username : group.getAllMembers()) {
                         if (!isUserOnline(username)) {
                             System.out.println("为离线用户 " + username + " 保存文件通知");
-                            addUnreadMessage(username, fileMessage);
+                            addUnreadMessage(username, "@@file|" + sender.getName() + "|" + fileName + "|" + fileSize);
                         }
                     }
                 } else {
@@ -913,7 +913,7 @@ public class ChatServerService {
                 // 如果用户不在线，保存为未读消息
                 if (!userOnline) {
                     System.out.println("用户 " + target + " 不在线，保存为未读消息");
-                    addUnreadMessage(target, fileMessage);
+                    addUnreadMessage(target, "@@file|" + sender.getName() + "|" + fileName + "|" + fileSize);
                 }
 
                 // 通知发送者

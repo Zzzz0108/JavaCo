@@ -84,6 +84,7 @@ public class ClientGUI extends JFrame implements KeyListener {
         anonymousButton = new JButton("切换聊天方式");
         voiceChatBtn = new JButton("语音聊天");
         groupVoiceChatBtn = new JButton("群组语音");
+        JButton fileUploadBtn = new JButton("上传文件");
         
         // 设置按钮大小一致
         Dimension buttonSize = new Dimension(100, 30);
@@ -95,6 +96,7 @@ public class ClientGUI extends JFrame implements KeyListener {
         anonymousButton.setPreferredSize(buttonSize);
         voiceChatBtn.setPreferredSize(buttonSize);
         groupVoiceChatBtn.setPreferredSize(buttonSize);
+        fileUploadBtn.setPreferredSize(buttonSize);
         
         groupControlPanel.add(createGroupButton);
         groupControlPanel.add(joinGroupButton);
@@ -104,10 +106,12 @@ public class ClientGUI extends JFrame implements KeyListener {
         groupControlPanel.add(anonymousButton);
         groupControlPanel.add(voiceChatBtn);
         groupControlPanel.add(groupVoiceChatBtn);
+        groupControlPanel.add(fileUploadBtn);
         
         // 添加按钮事件监听器
         voiceChatBtn.addActionListener(e -> handleVoiceChat());
         groupVoiceChatBtn.addActionListener(e -> handleGroupVoiceChat());
+        fileUploadBtn.addActionListener(e -> handleFileUpload());
         
         topPanel.add(groupControlPanel, BorderLayout.EAST);
         
@@ -837,6 +841,37 @@ public class ClientGUI extends JFrame implements KeyListener {
         messageField.addActionListener(sendListener);
         
         dialog.setVisible(true);
+    }
+
+    private void handleFileUpload() {
+        String selectedGroup = (String) groupSelector.getSelectedItem();
+        String selectedUser = (String) privateChatSelector.getSelectedItem();
+        
+        if (selectedGroup != null && !selectedGroup.equals("公共聊天")) {
+            // 群组文件上传
+            JFileChooser fileChooser = new JFileChooser();
+            if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File selectedFile = fileChooser.getSelectedFile();
+                try {
+                    sendGroupFile(selectedGroup, selectedFile);
+                } catch (IOException ex) {
+                    jta.append("发送群组文件失败: " + ex.getMessage() + "\n");
+                }
+            }
+        } else if (selectedUser != null && !selectedUser.equals("选择私聊对象")) {
+            // 私聊文件上传
+            JFileChooser fileChooser = new JFileChooser();
+            if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File selectedFile = fileChooser.getSelectedFile();
+                try {
+                    sendPrivateFile(selectedUser, selectedFile);
+                } catch (IOException ex) {
+                    jta.append("发送私聊文件失败: " + ex.getMessage() + "\n");
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "请选择群组或私聊对象");
+        }
     }
 
     @Override

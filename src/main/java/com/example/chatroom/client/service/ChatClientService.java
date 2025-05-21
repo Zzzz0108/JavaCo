@@ -11,8 +11,10 @@ public abstract class ChatClientService {
     private final String host;
     private final int port;
 
+    // ChatClientService 修改host为服务端计算机的IP
     public ChatClientService(String host, int port) {
-        this.host = host;
+        //this.host = host;
+        this.host = "10.129.87.160";
         this.port = port;
     }
 

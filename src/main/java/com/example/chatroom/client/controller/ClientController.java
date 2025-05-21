@@ -18,7 +18,9 @@ public class ClientController {
 
     public ClientController(String host, int port) {
         this.clientModel = new ClientModel();
-        this.chatClientService = new DefaultChatClientService(host, port);
+        //ClientController 修改host为服务端计算机的IP
+        //this.chatClientService = new DefaultChatClientService(host, port);
+        this.chatClientService = new DefaultChatClientService("10.129.87.160", port);
         this.privateChatWindows = new ConcurrentHashMap<>();
     }
 
