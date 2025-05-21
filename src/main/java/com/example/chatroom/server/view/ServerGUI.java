@@ -96,9 +96,9 @@ public class ServerGUI extends JFrame {
                 JOptionPane.YES_NO_OPTION
             );
             if (result == JOptionPane.YES_OPTION) {
-                serverController.stopServer();
-                window.append("服务器已关闭\n");
-                System.exit(0);
+            serverController.stopServer();
+            window.append("服务器已关闭\n");
+            System.exit(0);
             }
         });
 
@@ -117,9 +117,9 @@ public class ServerGUI extends JFrame {
                     JOptionPane.YES_NO_OPTION
                 );
                 if (result == JOptionPane.YES_OPTION) {
-                    serverController.stopServer();
-                    window.append("服务器已关闭\n");
-                    System.exit(0);
+                serverController.stopServer();
+                window.append("服务器已关闭\n");
+                System.exit(0);
                 }
             }
         });

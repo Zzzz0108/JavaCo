@@ -38,6 +38,10 @@ public class ClientController {
         chatClientService.sendMessage("@" + targetUser + "：" + message);
     }
 
+    public void sendGroupMessage(String groupId, String message) throws IOException {
+        sendMessage("#" + groupId + "：" + message);
+    }
+
     public void handleSystemCommand(String command) throws IOException {
         if (command.equals("@@anonymous")) {
             clientModel.setAnonymous(!clientModel.isAnonymous());

@@ -163,8 +163,14 @@ public class ChatServerService {
         System.out.println("尝试加入群组: " + groupId + ", 用户: " + client.getName());
         ChatGroup group = groups.get(groupId);
         if (group != null) {
+            System.out.println("找到群组，当前成员数: " + group.getMemberCount());
+            System.out.println("当前在线成员数: " + group.getOnlineMembers().size());
+            
             group.addMember(client);
             System.out.println("用户 " + client.getName() + " 成功加入群组 " + groupId);
+            System.out.println("加入后成员数: " + group.getMemberCount());
+            System.out.println("加入后在线成员数: " + group.getOnlineMembers().size());
+            
             broadcastToGroup(groupId, client.getName() + " 加入了群组");
             saveGroups(); // 保存群组信息
             return true;
@@ -187,14 +193,19 @@ public class ChatServerService {
     public void broadcastToGroup(String groupId, String message) {
         ChatGroup group = groups.get(groupId);
         if (group != null) {
-            String fullMessage = "[群组-" + group.getGroupName() + "] " + message;
+            System.out.println("开始广播群组消息 - 群组ID: " + groupId + ", 消息: " + message);  // 调试信息1
+            System.out.println("群组成员数量: " + group.getOnlineMembers().size());  // 调试信息2
+            
+            // 广播给所有在线群组成员
             for (ClientConnection member : group.getOnlineMembers()) {
                 try {
-                    member.getDos().writeUTF(fullMessage);
+                    System.out.println("发送消息给群组成员: " + member.getName());  // 调试信息3
+                    member.getDos().writeUTF(message);
                     member.getDos().flush();
                     // 保存聊天记录
-                    saveChatLog(member.getName(), fullMessage);
+                    saveChatLog(member.getName(), message);
                 } catch (IOException e) {
+                    System.err.println("发送消息给群组成员失败: " + member.getName() + ", 错误: " + e.getMessage());  // 调试信息4
                     e.printStackTrace();
                 }
             }
@@ -202,9 +213,12 @@ public class ChatServerService {
             // 为群组中离线的成员保存消息
             for (String username : group.getAllMembers()) {
                 if (!isUserOnline(username)) {
-                    addUnreadMessage(username, fullMessage);
+                    System.out.println("为离线成员保存消息: " + username);  // 调试信息5
+                    addUnreadMessage(username, message);
                 }
             }
+        } else {
+            System.err.println("群组不存在: " + groupId);  // 调试信息6
         }
     }
 
@@ -393,9 +407,63 @@ public class ChatServerService {
         if (parts.length == 2) {
             String groupId = parts[0];
             String content = parts[1];
-            String displayName = sender.isAnonymous() ? sender.getAnonymousName() : sender.getName();
-            String fullMessage = "[群组-" + groups.get(groupId).getGroupName() + "] [" + displayName + "]：" + content;
-            broadcastToGroup(groupId, "[" + displayName + "]：" + content);
+            ChatGroup group = groups.get(groupId);
+            
+            if (group != null) {
+                // 检查发送者是否是群组成员
+                if (group.hasMember(sender.getName())) {
+                    String displayName = sender.isAnonymous() ? sender.getAnonymousName() : sender.getName();
+                    // 使用简单的消息格式
+                    String fullMessage = "[" + displayName + "：" + content + "]";
+                    System.out.println("准备广播群组消息: " + fullMessage);
+                    
+                    // 获取所有群组成员
+                    List<String> allMembers = group.getAllMembers();
+                    System.out.println("群组 " + groupId + " 的所有成员: " + allMembers);
+                    
+                    // 广播给所有在线成员
+                    for (ClientConnection cc : clientConnections) {
+                        if (allMembers.contains(cc.getName())) {
+                            try {
+                                System.out.println("发送消息给群组成员: " + cc.getName());
+                                cc.getDos().writeUTF(fullMessage);
+                                cc.getDos().flush();
+                                // 保存聊天记录
+                                saveChatLog(cc.getName(), fullMessage);
+                            } catch (IOException e) {
+                                System.err.println("发送消息给群组成员失败: " + cc.getName() + ", 错误: " + e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                    
+                    // 为离线成员保存消息
+                    for (String username : allMembers) {
+                        if (!isUserOnline(username)) {
+                            System.out.println("为离线成员保存消息: " + username);
+                            addUnreadMessage(username, fullMessage);
+                        }
+                    }
+                } else {
+                    try {
+                        String errorMessage = "[系统消息]：您不是该群组成员";
+                        sender.getDos().writeUTF(errorMessage);
+                        sender.getDos().flush();
+                        System.out.println("发送错误消息给用户: " + sender.getName() + ", 消息: " + errorMessage);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            } else {
+                try {
+                    String errorMessage = "[系统消息]：群组不存在";
+                    sender.getDos().writeUTF(errorMessage);
+                    sender.getDos().flush();
+                    System.out.println("发送错误消息给用户: " + sender.getName() + ", 消息: " + errorMessage);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 

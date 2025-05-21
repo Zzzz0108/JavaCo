@@ -1,3 +1,2 @@
 1,g1,user1;user2;test
-default,默认群组,
 2,g2,admin;user4

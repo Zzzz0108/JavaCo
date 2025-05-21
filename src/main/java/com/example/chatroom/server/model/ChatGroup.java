@@ -39,10 +39,32 @@ public class ChatGroup {
     }
 
     public void addMember(ClientConnection member) {
+        System.out.println("添加成员到群组 - 成员名: " + member.getName());
+        System.out.println("添加前成员数: " + members.size());
+        System.out.println("添加前在线成员数: " + onlineMembers.size());
+        
+        // 先添加到成员集合
         if (!members.contains(member.getName())) {
             members.add(member.getName());
+            System.out.println("添加到成员集合");
         }
-        onlineMembers.add(member);
+        
+        // 再添加到在线成员列表
+        boolean alreadyOnline = false;
+        for (ClientConnection onlineMember : onlineMembers) {
+            if (onlineMember.getName().equals(member.getName())) {
+                alreadyOnline = true;
+                break;
+            }
+        }
+        
+        if (!alreadyOnline) {
+            onlineMembers.add(member);
+            System.out.println("添加到在线成员列表");
+        }
+        
+        System.out.println("添加后成员数: " + members.size());
+        System.out.println("添加后在线成员数: " + onlineMembers.size());
     }
 
     public void removeMember(ClientConnection member) {
@@ -51,7 +73,7 @@ public class ChatGroup {
     }
 
     public boolean hasMember(ClientConnection member) {
-        return onlineMembers.contains(member);
+        return members.contains(member.getName());
     }
 
     public boolean hasMember(String username) {
