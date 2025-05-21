@@ -136,8 +136,19 @@
    - 点击登录按钮
 
 - 如果想实现多台计算机聊天，需修改配置，启动唯一服务端，并将所有客户端统一修改服务器IP和端口
-    - ![截屏2025-05-21 21.08.35.png](..%2F..%2F..%2F..%2Fvar%2Ffolders%2F72%2Fjcg4sx6j6_gd3660xz15g7tm0000gn%2FT%2FTemporaryItems%2FNSIRD_screencaptureui_UlA3kf%2F%E6%88%AA%E5%B1%8F2025-05-21%2021.08.35.png)
-    - ![截屏2025-05-21 21.10.38.png](..%2F%E6%88%AA%E5%B1%8F2025-05-21%2021.10.38.png)
+    - public ClientController(String host, int port) {
+        this.clientModel = new ClientModel();
+        //ClientController 修改host为服务端计算机的IP
+        //this.chatClientService = new DefaultChatClientService(host, port);
+        this.chatClientService = new DefaultChatClientService("10.129.87.160", port);
+        this.privateChatWindows = new ConcurrentHashMap<>();
+    }
+    - // ChatClientService 修改host为服务端计算机的IP
+    public ChatClientService(String host, int port) {
+        //this.host = host;
+        this.host = "10.129.87.160";
+        this.port = port;
+    }
 
 ### 基本操作
 
